@@ -520,6 +520,11 @@ export class StudEngine {
     const activeOpponents = this.players.filter(
       (x, j) => j !== i && !x.folded,
     ).length
+    const humanIdx = this.players.findIndex((x) => x.isHuman)
+    const humanIsLastAggressor =
+      humanIdx >= 0 &&
+      this.lastAggressorSeat === humanIdx &&
+      this.raisesThisStreet > 0
     return {
       difficulty: this.settings.difficulty,
       hole: p.hole,
@@ -532,6 +537,8 @@ export class StudEngine {
       stack: p.stack,
       street: this.street,
       activeOpponents,
+      raisesThisStreet: this.raisesThisStreet,
+      humanIsLastAggressor,
     }
   }
 

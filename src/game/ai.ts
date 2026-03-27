@@ -19,6 +19,10 @@ export interface AiContext {
   street: 3 | 4 | 5 | 6 | 7
   /** Opponent count still in hand (not folded). */
   activeOpponents: number
+  /** Aggression count on this street (opening bet = 1, each raise +1). */
+  raisesThisStreet: number
+  /** Human was last to increase the bet — tighten calling range. */
+  humanIsLastAggressor: boolean
 }
 
 function noise(difficulty: Difficulty): number {
@@ -73,15 +77,11 @@ export function pickAiAction(ctx: AiContext): AiAction {
     const potAfter = ctx.pot + ctx.toCall
     const potOdds = ctx.pot / potAfter
 
-    /** Rough "price" of calling one bet in limit — call more when pot is big. */
-    const looseCallBias =
-      ctx.difficulty === 'easy' ? 0.22 : ctx.difficulty === 'medium' ? 0.16 : 0.1
-
     const junkFold =
       p < (ctx.difficulty === 'hard' ? 0.07 : ctx.difficulty === 'medium' ? 0.09 : 0.11) &&
       v < 0.14
 
-    if (junkFold && Math.random() < (ctx.difficulty === 'easy' ? 0.45 : 0.62)) {
+    if (junkFold && Math.random() < (ctx.difficulty === 'easy' ? 0.5 : 0.68)) {
       return 'fold'
     }
 
@@ -99,14 +99,48 @@ export function pickAiAction(ctx: AiContext): AiAction {
       if (strongRaise || semiBluff || thinValue) return 'raise'
     }
 
-    const callThreshold = potOdds - looseCallBias
-    if (p >= callThreshold || p > 0.16) return 'call'
+    /** Minimum hand “strength” to call — was too low via old `p > 0.16` always-call. */
+    const baseCall =
+      ctx.difficulty === 'easy' ? 0.2 : ctx.difficulty === 'medium' ? 0.26 : 0.3
+    const streetExtra = Math.min(0.1, Math.max(0, ctx.street - 3) * 0.025)
+    const vsHuman = ctx.humanIsLastAggressor ? 0.11 : 0
+    const vsMultiRaise =
+      ctx.raisesThisStreet >= 2 ? 0.06 * (ctx.raisesThisStreet - 1) : 0
+    const minStrengthToCall = Math.min(
+      0.62,
+      baseCall + streetExtra + vsHuman + vsMultiRaise,
+    )
 
-    const peel =
-      potOdds > 0.35 && Math.random() < (ctx.difficulty === 'easy' ? 0.55 : 0.35)
-    if (peel) return 'call'
+    /** Pot-odds path: only helps when pot is big vs price — not a free call. */
+    const looseCallBias =
+      ctx.difficulty === 'easy' ? 0.12 : ctx.difficulty === 'medium' ? 0.08 : 0.05
+    const potOddsCallLine = potOdds - looseCallBias - (ctx.humanIsLastAggressor ? 0.1 : 0)
 
-    return Math.random() < (ctx.difficulty === 'easy' ? 0.42 : 0.28) ? 'call' : 'fold'
+    const hasShowdownValue = p >= minStrengthToCall
+    const hasPotOddsCall = p >= potOddsCallLine && p >= 0.14
+
+    if (hasShowdownValue || hasPotOddsCall) {
+      if (hasPotOddsCall && !hasShowdownValue) {
+        const peelCap =
+          ctx.humanIsLastAggressor && ctx.raisesThisStreet >= 2
+            ? 0.18
+            : ctx.humanIsLastAggressor
+              ? 0.32
+              : 0.55
+        if (Math.random() > peelCap) return 'fold'
+      }
+      return 'call'
+    }
+
+    const desperatePeel =
+      potOdds > 0.42 &&
+      v > 0.36 &&
+      ctx.street >= 5 &&
+      !ctx.humanIsLastAggressor &&
+      Math.random() < (ctx.difficulty === 'easy' ? 0.22 : 0.12)
+    if (desperatePeel) return 'call'
+
+    return Math.random() < (ctx.difficulty === 'easy' ? 0.18 : 0.12) ? 'call' : 'fold'
   }
 
   if (ctx.canRaise && p > 0.55) return 'raise'
