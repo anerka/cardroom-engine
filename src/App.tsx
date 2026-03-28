@@ -253,9 +253,7 @@ export default function App() {
               : settings.tempoPreset}
           </li>
           <li>Stakes: {settings.stakes}</li>
-          <li>
-            Starting stack: {STAKES_BY_TIER[settings.stakes].startingStack}
-          </li>
+          <li>Starting stack (each): {settings.startingStack}</li>
         </ul>
       </section>
     </div>
@@ -374,12 +372,14 @@ function SettingsScreen({
           Stakes tier
           <select
             value={draft.stakes}
-            onChange={(e) =>
+            onChange={(e) => {
+              const stakes = e.target.value as GameSettings['stakes']
               setDraft((d) => ({
                 ...d,
-                stakes: e.target.value as GameSettings['stakes'],
+                stakes,
+                startingStack: STAKES_BY_TIER[stakes].startingStack,
               }))
-            }
+            }}
           >
             <option value="low">Low</option>
             <option value="mid">Mid</option>
@@ -387,11 +387,33 @@ function SettingsScreen({
           </select>
         </label>
 
+        <label>
+          Starting stack (each player)
+          <input
+            type="number"
+            min={20}
+            max={9999999}
+            step={10}
+            value={draft.startingStack}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                startingStack: Math.max(
+                  20,
+                  Math.min(9_999_999, Number(e.target.value) || DEFAULT_SETTINGS.startingStack),
+                ),
+              }))
+            }
+          />
+          <span className="hint">
+            (Tier default: {STAKES_BY_TIER[draft.stakes].startingStack})
+          </span>
+        </label>
+
         <p className="stakes-preview">
           Ante {STAKES_BY_TIER[draft.stakes].ante} · Small{' '}
           {STAKES_BY_TIER[draft.stakes].smallBet} · Big{' '}
-          {STAKES_BY_TIER[draft.stakes].bigBet} · Stack{' '}
-          {STAKES_BY_TIER[draft.stakes].startingStack}
+          {STAKES_BY_TIER[draft.stakes].bigBet}
         </p>
 
         <div className="form-actions">

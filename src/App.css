@@ -436,7 +436,7 @@
 }
 
 .seat--opp .cards-row {
-  min-height: 1.48rem;
+  min-height: 2rem;
   justify-content: center;
 }
 
@@ -446,7 +446,7 @@
 }
 
 .seat--opp .cards-row--spread .card:not(:first-child) {
-  margin-left: -0.62em;
+  margin-left: -0.55em;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.3);
 }
 
@@ -483,18 +483,7 @@
 }
 
 .seat--opp .cards-row--hole-pocket .card:not(:first-child) {
-  margin-left: -0.68em;
-}
-
-.seat--opp .card {
-  font-size: 0.8rem;
-  padding: 0.14rem 0.26rem;
-  min-width: 1.55em;
-}
-
-.seat--opp .card.back {
-  min-width: 1.75em;
-  font-size: 0.72rem;
+  margin-left: -0.65em;
 }
 
 .seat--opp .player-head {
@@ -849,7 +838,7 @@
   }
 
   .seat--opp .player-card {
-    max-width: min(220px, 56vw);
+    max-width: min(280px, 92vw);
     padding: 0.18rem 0.36rem 0.4rem;
   }
 
@@ -862,28 +851,16 @@
     font-size: 0.62rem;
   }
 
-  .seat--opp .card {
-    font-size: 0.74rem;
-    padding: 0.1rem 0.22rem;
-    min-width: 1.48em;
-    border-radius: 4px;
-  }
-
-  .seat--opp .card.back {
-    min-width: 1.68em;
-    font-size: 0.64rem;
-  }
-
   .seat--opp .cards-row {
-    min-height: 1.38rem;
+    min-height: 2rem;
   }
 
   .seat--opp .cards-row--spread .card:not(:first-child) {
-    margin-left: -0.52em;
+    margin-left: -0.48em;
   }
 
   .seat--opp .cards-row--hole-pocket .card:not(:first-child) {
-    margin-left: -0.58em;
+    margin-left: -0.55em;
   }
 
   .seat--opp .bet-status {
@@ -899,10 +876,6 @@
   .player-card--hero {
     width: max-content;
     max-width: 100%;
-  }
-
-  .player-card--hero .card {
-    font-size: clamp(0.7rem, 3vw, 0.88rem);
   }
 
   .card.card--hero-sunk {

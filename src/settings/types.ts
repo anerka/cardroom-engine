@@ -50,6 +50,8 @@ export interface GameSettings {
   handsPerLevel: number
   useAdvancedTempo: boolean
   stakes: StakesTier
+  /** Starting chips for every player (you and bots). */
+  startingStack: number
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -59,4 +61,5 @@ export const DEFAULT_SETTINGS: GameSettings = {
   handsPerLevel: 8,
   useAdvancedTempo: false,
   stakes: 'low',
+  startingStack: STAKES_BY_TIER.low.startingStack,
 }

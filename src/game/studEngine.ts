@@ -153,7 +153,9 @@ export class StudEngine {
   }
 
   startSession(): void {
-    const baseStack = STAKES_BY_TIER[this.settings.stakes].startingStack
+    const tier = STAKES_BY_TIER[this.settings.stakes]
+    const minStack = Math.max(tier.ante, tier.bringIn) * 2
+    const baseStack = Math.max(minStack, this.settings.startingStack)
     this.players = []
     this.players.push({
       id: 'human',
