@@ -481,9 +481,28 @@
   background: rgba(255, 255, 255, 0.92);
   color: #1a1f1c;
   font-weight: 600;
-  min-width: 1.85em;
+  min-width: 2em;
   text-align: center;
   border: 1px solid rgba(0, 0, 0, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-face__rank,
+.card-face__suit {
+  line-height: 1;
+}
+
+/* Hearts & diamonds — saturated red vs near-black clubs/spades */
+.card.card--red-suit {
+  color: #c91828;
+}
+
+.card.card--black-suit {
+  color: #0a1610;
 }
 
 .card.hole {

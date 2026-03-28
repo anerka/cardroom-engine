@@ -11,7 +11,8 @@ import {
   type StudSnapshot,
   type TablePlayer,
 } from './game/studEngine'
-import { formatCard } from './game/cards'
+import type { Card } from './game/cards'
+import { isRedSuit, rankDisplay, suitSymbol } from './game/cards'
 import { handLabel, bestHandScore } from './game/pokerRank'
 import { loadSettings, saveSettings } from './settings/storage'
 import {
@@ -21,6 +22,16 @@ import {
   type GameSettings,
 } from './settings/types'
 import './App.css'
+
+function PlayingCardFace({ c, kind }: { c: Card; kind: 'hole' | 'up' }) {
+  const suitClass = isRedSuit(c.suit) ? 'card--red-suit' : 'card--black-suit'
+  return (
+    <span className={['card', kind, suitClass].join(' ')}>
+      <span className="card-face__rank">{rankDisplay(c.rank)}</span>
+      <span className="card-face__suit">{suitSymbol(c.suit)}</span>
+    </span>
+  )
+}
 
 /**
  * Opponent seats on an upper ellipse (no seats at bottom — hero sits there).
@@ -447,21 +458,13 @@ function PlayScreen({
     const owe = hb > p.streetCommit ? hb - p.streetCommit : 0
     const hole =
       p.isHuman || showAllHoles
-        ? p.hole.map((c, i) => (
-            <span key={i} className="card hole">
-              {formatCard(c)}
-            </span>
-          ))
+        ? p.hole.map((c, i) => <PlayingCardFace key={i} c={c} kind="hole" />)
         : p.hole.map((_, i) => (
             <span key={i} className="card back">
               ●
             </span>
           ))
-    const up = p.up.map((c, i) => (
-      <span key={i} className="card up">
-        {formatCard(c)}
-      </span>
-    ))
+    const up = p.up.map((c, i) => <PlayingCardFace key={i} c={c} kind="up" />)
     const holeLabel =
       p.isHuman || showAllHoles ? 'Hole cards' : 'Hidden'
     const upZone = (

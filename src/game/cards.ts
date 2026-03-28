@@ -53,8 +53,21 @@ export function compareDoorForBringIn(a: Card, b: Card): number {
   return suitIndex(a.suit) - suitIndex(b.suit)
 }
 
+export function isRedSuit(s: Suit): boolean {
+  return s === 'h' || s === 'd'
+}
+
+export function suitSymbol(s: Suit): string {
+  return s === 'c' ? '♣' : s === 'd' ? '♦' : s === 'h' ? '♥' : '♠'
+}
+
+/** Rank as shown on screen (ten = "10"). */
+export function rankDisplay(r: Rank): string {
+  return r === 'T' ? '10' : r
+}
+
 export function formatCard(c: Card): string {
-  return `${c.rank}${c.suit === 'c' ? '♣' : c.suit === 'd' ? '♦' : c.suit === 'h' ? '♥' : '♠'}`
+  return `${rankDisplay(c.rank)}${suitSymbol(c.suit)}`
 }
 
 export function freshDeck(): Card[] {
