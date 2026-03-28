@@ -22,7 +22,8 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
+      # vite-plugin-pwa peers Vite ≤7; project uses Vite 8 (see root .npmrc too).
+      - run: npm ci --legacy-peer-deps
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
