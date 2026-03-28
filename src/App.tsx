@@ -66,7 +66,8 @@ function heroCardsInTableOrder(
 /**
  * Opponent seats on an upper ellipse (no seats at bottom — hero sits there).
  * θ is standard math angle from +x; sin negative puts seats in upper half of felt.
- * `narrow` pulls seats inward so panels fit on phone screens.
+ * `narrow` uses a slightly smaller vertical arc; horizontal spread stays close to
+ * desktop so end seats still sit near the left/right edges (same feel as Mac).
  */
 function opponentSeatPositions(
   count: number,
@@ -77,7 +78,8 @@ function opponentSeatPositions(
   const end = (-12 * Math.PI) / 180
   const cx = 50
   const cy = narrow ? 42 : 41
-  const rx = narrow ? 27 : 42
+  /* rx was 27 on narrow + left clamp 22–78%, which bunched bots away from screen edges */
+  const rx = narrow ? 40 : 42
   const ry = narrow ? 18 : 25
   return Array.from({ length: count }, (_, i) => {
     const t = count === 1 ? 0.5 : i / (count - 1)
@@ -85,8 +87,7 @@ function opponentSeatPositions(
     let left = cx + rx * Math.cos(theta)
     let top = cy + ry * Math.sin(theta)
     if (narrow) {
-      left = Math.min(78, Math.max(22, left))
-      top = Math.min(36, Math.max(15, top))
+      top = Math.min(38, Math.max(14, top))
     }
     return { left, top }
   })
