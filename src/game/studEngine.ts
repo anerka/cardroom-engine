@@ -552,6 +552,14 @@ export class StudEngine {
       this.rng,
     )
 
+    const aliveInBettingOrbit = this.players.filter(
+      (pl) => !pl.folded && !pl.allIn,
+    ).length
+    const checksBeforeMe =
+      this.checkRound && this.highBet === 0
+        ? aliveInBettingOrbit - this.checkPending.size
+        : 0
+
     return {
       difficulty: this.settings.difficulty,
       hole: p.hole,
@@ -567,6 +575,7 @@ export class StudEngine {
       raisesThisStreet: this.raisesThisStreet,
       humanIsLastAggressor,
       showdownEquity,
+      checksBeforeMe,
     }
   }
 

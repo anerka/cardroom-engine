@@ -20,6 +20,11 @@ export interface AiContext {
   humanIsLastAggressor: boolean
   /** Monte Carlo P(share pot at showdown) from fair information only (~0–1). */
   showdownEquity: number
+  /**
+   * Check-orbit with no bet yet: players who already checked before this seat
+   * (0 = first to act). Used for steal / stab frequency.
+   */
+  checksBeforeMe: number
 }
 
 function noise(difficulty: Difficulty): number {
@@ -59,17 +64,49 @@ export function pickAiAction(ctx: AiContext): AiAction {
   const pressure = ctx.activeOpponents > 2 ? 0.025 : 0
 
   if (ctx.canCheck) {
-    const openEq =
-      ctx.street <= 4 ? 0.42 + pressure * 0.5 : 0.38 + pressure * 0.5
-    if (eq > openEq && ctx.canRaise && Math.random() < (ctx.difficulty === 'hard' ? 0.42 : 0.28)) {
-      return 'raise'
+    const pot = Math.max(1, ctx.pot)
+    const ri = ctx.raiseIncrement
+    const openShare = ri > 0 ? ri / (pot + ri) : 0
+    const late =
+      ctx.checksBeforeMe >= 2 ||
+      ctx.checksBeforeMe >= Math.max(1, ctx.activeOpponents - 1)
+
+    if (ctx.canRaise && ri > 0) {
+      const marginOpen =
+        difficultyMargin(ctx.difficulty) * 0.78 +
+        (ctx.activeOpponents > 2 ? 0.022 : 0) -
+        (late ? 0.014 : 0) +
+        pressure * 0.4
+      const needEq = openShare + marginOpen
+
+      const valFreq =
+        ctx.difficulty === 'hard' ? 0.55 : ctx.difficulty === 'medium' ? 0.4 : 0.28
+      if (eq >= needEq && Math.random() < valFreq) return 'raise'
+
+      if (
+        eq >= needEq - 0.05 &&
+        (p > 0.32 || v > 0.3 || eq > 0.26) &&
+        Math.random() < (ctx.difficulty === 'hard' ? 0.38 : ctx.difficulty === 'medium' ? 0.26 : 0.16)
+      ) {
+        return 'raise'
+      }
+
+      const bluffBase =
+        ctx.difficulty === 'hard' ? 0.16 : ctx.difficulty === 'medium' ? 0.1 : 0.055
+      const lateBonus = late ? 0.09 : 0.035
+      const boardRep = v > 0.46 ? 0.07 : 0
+      const canBluff = eq < needEq - 0.02 && eq < 0.45
+      if (canBluff && Math.random() < bluffBase + lateBonus + boardRep) {
+        return 'raise'
+      }
     }
-    if (p < 0.3 - pressure && ctx.difficulty === 'easy' && Math.random() < 0.08) {
-      return 'raise'
+
+    if (ctx.canRaise && Math.random() < (ctx.difficulty === 'hard' ? 0.2 : 0.11)) {
+      if (p > 0.52 && eq > 0.24) return 'raise'
+      if (v > 0.42 && eq > 0.28 && ctx.street >= 5) return 'raise'
     }
-    if (p < 0.34) return 'check'
-    if (p > 0.55 && ctx.canRaise && Math.random() < 0.32) return 'raise'
-    if (v > 0.44 && ctx.canRaise && eq > 0.32 && Math.random() < 0.22) return 'raise'
+
+    if (eq < 0.12 && p < 0.22 && v < 0.2) return 'check'
     return 'check'
   }
 
