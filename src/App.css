@@ -699,15 +699,20 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Rank above suit — taller card so both stay readable when fanned */
+/*
+ * Rank above suit, pinned top-left (like real cards). When fanned, the next
+ * card covers the empty right side — not the index pips.
+ */
 .card.card--face {
   flex-direction: column;
-  gap: 0.1em;
-  justify-content: center;
-  align-items: center;
-  min-width: 1.42em;
+  gap: 0.05em;
+  justify-content: flex-start;
+  align-items: flex-start;
+  text-align: left;
+  box-sizing: border-box;
+  min-width: 1.85em;
   min-height: 2.75em;
-  padding: 0.2rem 0.28rem 0.26rem;
+  padding: 0.12rem 0.5rem 0.22rem 0.16rem;
   font-size: clamp(0.82rem, 2.75vw, 1rem);
 }
 
@@ -715,11 +720,13 @@
   line-height: 1;
   font-size: 1.05em;
   font-weight: 700;
+  align-self: flex-start;
 }
 
 .card-face__suit {
   line-height: 1;
   font-size: 1.12em;
+  align-self: flex-start;
 }
 
 /* Hearts & diamonds — saturated red vs near-black clubs/spades */
@@ -891,8 +898,9 @@
   }
 
   .card.card--face {
-    min-height: 2.55em;
-    min-width: 1.32em;
+    min-height: 2.5em;
+    min-width: 1.72em;
+    padding: 0.1rem 0.42rem 0.18rem 0.14rem;
   }
 
   .seat--opp .bet-status {
