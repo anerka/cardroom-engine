@@ -16,6 +16,9 @@ import {
 } from './settings/types'
 import './App.css'
 
+/** Pause between each bot action so the table state is readable (ms). */
+const AI_ACTION_PAUSE_MS = 820
+
 /**
  * Opponent seats on an upper ellipse (no seats at bottom — hero sits there).
  * θ is standard math angle from +x; sin negative puts seats in upper half of felt.
@@ -103,7 +106,6 @@ export default function App() {
     const engine = new StudEngine(settings)
     engine.startSession()
     engine.beginHand()
-    engine.runAiLoop()
     setGame({ engine, snap: engine.snapshot() })
     setScreen('play')
   }, [settings])
@@ -342,8 +344,11 @@ function PlayScreen({
     ) {
       return
     }
-    engine.runAiLoop()
-    onRefresh()
+    const id = window.setTimeout(() => {
+      engine.stepAiOnce()
+      onRefresh()
+    }, AI_ACTION_PAUSE_MS)
+    return () => window.clearTimeout(id)
   }, [engine, onRefresh, snap.actionIndex, snap.humanMustAct, snap.phase])
 
   const legal = snap.humanMustAct ? engine.legalHumanActions() : []
@@ -355,7 +360,6 @@ function PlayScreen({
 
   const continueHand = () => {
     engine.acknowledgeHandSummary()
-    engine.runAiLoop()
     onRefresh()
   }
 

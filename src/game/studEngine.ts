@@ -490,25 +490,28 @@ export class StudEngine {
   applyHuman(a: HumanAction): void {
     if (!this.snapshot().humanMustAct) return
     this.applyAction(this.actionIndex!, a)
-    this.runAiLoop()
   }
 
-  runAiLoop(): void {
-    while (this.phase === 'betting' && this.actionIndex !== null) {
-      const p = this.players[this.actionIndex]
-      if (p.isHuman) break
-      const ctx = this.buildAiContext(this.actionIndex)
-      const choice = pickAiAction(ctx)
-      const mapped: HumanAction =
-        choice === 'check'
-          ? { type: 'check' }
-          : choice === 'call'
-            ? { type: 'call' }
-            : choice === 'raise'
-              ? { type: 'raise' }
-              : { type: 'fold' }
-      this.applyAction(this.actionIndex, mapped)
-    }
+  /**
+   * If it is a bot's turn, pick and apply one action. Used by the UI with a delay
+   * between steps so the player can follow the action.
+   */
+  stepAiOnce(): boolean {
+    if (this.phase !== 'betting' || this.actionIndex === null) return false
+    const p = this.players[this.actionIndex]
+    if (p.isHuman) return false
+    const ctx = this.buildAiContext(this.actionIndex)
+    const choice = pickAiAction(ctx)
+    const mapped: HumanAction =
+      choice === 'check'
+        ? { type: 'check' }
+        : choice === 'call'
+          ? { type: 'call' }
+          : choice === 'raise'
+            ? { type: 'raise' }
+            : { type: 'fold' }
+    this.applyAction(this.actionIndex, mapped)
+    return true
   }
 
   private buildAiContext(i: number): AiContext {
