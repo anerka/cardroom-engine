@@ -1,21 +1,27 @@
 {
   "name": "Seven Card Stud",
   "short_name": "Seven Stud",
+  "description": "Ante, bring-in, fixed limit seven card stud — play money.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }
   ],
-  "theme_color": "#000000",
-  "background_color": "#000000",
-  "display": "standalone"
+  "theme_color": "#0c1512",
+  "background_color": "#0c1512",
+  "display": "standalone",
+  "orientation": "portrait-primary"
 }
