@@ -181,42 +181,44 @@ export default function App() {
   }
 
   return (
-    <div className="app shell">
-      <header className="topbar">
+    <div className="app shell shell--menu">
+      <header className="topbar topbar--menu">
         <h1>Seven Card Stud</h1>
         <p className="tagline">
           Ante, bring-in, fixed limit — play money only.
         </p>
       </header>
-      <main className="menu-main">
-        <button type="button" className="btn primary" onClick={startGame}>
-          New table
-        </button>
-        <button
-          type="button"
-          className="btn ghost"
-          onClick={() => setScreen('settings')}
-        >
-          Settings
-        </button>
-        <section className="menu-meta">
-          <h2>Current setup</h2>
-          <ul>
-            <li>Opponents: {settings.opponentCount}</li>
-            <li>Difficulty: {settings.difficulty}</li>
-            <li>
-              Tempo:{' '}
-              {settings.useAdvancedTempo
-                ? `${settings.handsPerLevel} hands / level`
-                : settings.tempoPreset}
-            </li>
-            <li>Stakes: {settings.stakes}</li>
-            <li>
-              Starting stack: {STAKES_BY_TIER[settings.stakes].startingStack}
-            </li>
-          </ul>
-        </section>
-      </main>
+      <div className="menu-actions-wrap">
+        <div className="menu-main menu-main--actions">
+          <button type="button" className="btn primary" onClick={startGame}>
+            New table
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => setScreen('settings')}
+          >
+            Settings
+          </button>
+        </div>
+      </div>
+      <section className="menu-meta">
+        <h2>Current setup</h2>
+        <ul>
+          <li>Opponents: {settings.opponentCount}</li>
+          <li>Difficulty: {settings.difficulty}</li>
+          <li>
+            Tempo:{' '}
+            {settings.useAdvancedTempo
+              ? `${settings.handsPerLevel} hands / level`
+              : settings.tempoPreset}
+          </li>
+          <li>Stakes: {settings.stakes}</li>
+          <li>
+            Starting stack: {STAKES_BY_TIER[settings.stakes].startingStack}
+          </li>
+        </ul>
+      </section>
     </div>
   )
 }
