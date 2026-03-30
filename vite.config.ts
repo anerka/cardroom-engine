@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/seven-stud/',
+  base: '/cardroom-engine/',
   plugins: [
     react(),
     VitePWA({
