@@ -338,33 +338,32 @@ export default function App() {
         </header>
         <div className="menu-actions-wrap">
           <div className="menu-main menu-main--actions">
-            <button
-              type="button"
-              className={['btn', selectedGame === 'stud' ? 'primary' : 'ghost'].join(' ')}
-              onClick={() => {
-                setSelectedGame('stud')
-                startGame('stud')
-              }}
-            >
-              Play {GAME_LABELS.stud}
-            </button>
-            <button
-              type="button"
-              className={['btn', selectedGame === 'razz' ? 'primary' : 'ghost'].join(' ')}
-              onClick={() => {
-                setSelectedGame('razz')
-                startGame('razz')
-              }}
-            >
-              Play {GAME_LABELS.razz}
-            </button>
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => setScreen('settings')}
-            >
-              {GAME_LABELS[selectedGame]} settings
-            </button>
+            {(['stud', 'razz'] as const).map((gameKind) => (
+              <div key={gameKind} className="menu-game-row">
+                <button
+                  type="button"
+                  className={['btn', selectedGame === gameKind ? 'primary' : 'ghost'].join(' ')}
+                  onClick={() => {
+                    setSelectedGame(gameKind)
+                    startGame(gameKind)
+                  }}
+                >
+                  Play {GAME_LABELS[gameKind]}
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost btn-settings-icon"
+                  aria-label={`${GAME_LABELS[gameKind]} settings`}
+                  title={`${GAME_LABELS[gameKind]} settings`}
+                  onClick={() => {
+                    setSelectedGame(gameKind)
+                    setScreen('settings')
+                  }}
+                >
+                  ⚙
+                </button>
+              </div>
+            ))}
           </div>
         </div>
         <section className="menu-meta">

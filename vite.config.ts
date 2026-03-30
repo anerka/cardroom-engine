@@ -21,10 +21,10 @@ export default defineConfig({
         'sounds/PokerRaise.mp3',
       ],
       manifest: {
-        name: 'Seven Card Stud',
-        short_name: 'Seven Stud',
+        name: 'Cardroom Engine',
+        short_name: 'Cardroom',
         description:
-          'Ante, bring-in, fixed limit seven card stud — play money.',
+          'Fixed-limit Seven Card Stud and Razz — play money practice table.',
         lang: 'en',
         dir: 'ltr',
         start_url: './',

@@ -10,10 +10,41 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title>Seven Card Stud</title>
+    <title>Cardroom Engine</title>
+    <meta
+      name="description"
+      content="Fixed-limit Seven Card Stud and Razz — play money practice table."
+    />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <p
+        style="
+          margin: 0;
+          padding: 1.25rem;
+          font-family: system-ui, sans-serif;
+          color: #e8f0e8;
+          background: #0c1512;
+          min-height: 100vh;
+        "
+      >
+        Loading…
+      </p>
+    </div>
+    <noscript>
+      <p
+        style="
+          margin: 0;
+          padding: 1.25rem;
+          font-family: system-ui, sans-serif;
+          color: #e8f0e8;
+          background: #0c1512;
+          min-height: 100vh;
+        "
+      >
+        JavaScript is required to run the table. Enable scripts and reload this page.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

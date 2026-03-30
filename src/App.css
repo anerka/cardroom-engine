@@ -53,10 +53,30 @@
   max-width: 280px;
 }
 
-.menu-main--actions .btn {
+.menu-main--actions > .btn {
   width: 100%;
   text-align: center;
   justify-content: center;
+}
+
+.menu-game-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.menu-game-row .btn {
+  text-align: center;
+  justify-content: center;
+}
+
+.btn-settings-icon {
+  min-width: 2.7rem;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .shell--menu .menu-meta {
