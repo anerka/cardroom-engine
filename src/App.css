@@ -262,6 +262,13 @@
   max-width: 100%;
 }
 
+/* Portrait phones: vertically center felt + street/actions in the area below the status line */
+@media (orientation: portrait) {
+  .play-table-column--narrow {
+    justify-content: center;
+  }
+}
+
 .table-wrap {
   flex: 0 0 auto;
   border-radius: 16px;
