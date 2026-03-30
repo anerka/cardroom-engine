@@ -1,13 +1,20 @@
 import { pickAiAction, type AiContext } from './ai'
 import {
   buildUnknownPoolForViewer,
+  estimateRazzShowdownEquity,
   estimateStudShowdownEquity,
 } from './studEquity'
 import type { Card } from './cards'
 import { compareDoorForBringIn, formatCard, freshDeck, shuffle } from './cards'
 import { bestHandScore, bestVisibleScore, compareScores, handLabel } from './pokerRank'
+import {
+  bestRazzLowScore,
+  compareRazzLowScores,
+  razzHandLabel,
+  razzVisibleScore,
+} from './razzRank'
 import { buildPotLayers } from './sidePots'
-import type { GameSettings } from '../settings/types'
+import type { GameKind, GameSettings } from '../settings/types'
 import {
   STAKES_BY_TIER,
   TEMPO_HANDS_BY_PRESET,
@@ -152,6 +159,7 @@ function handsPerLevel(settings: GameSettings): number {
 
 export class StudEngine {
   settings: GameSettings
+  gameKind: GameKind
   private rng: () => number
   players: TablePlayer[] = []
   dealerIndex = 0
@@ -177,8 +185,13 @@ export class StudEngine {
   private lastBettingSound: BettingSound | null = null
   stakes: EffectiveStakes
 
-  constructor(settings: GameSettings, rng: () => number = Math.random) {
+  constructor(
+    settings: GameSettings,
+    gameKind: GameKind = 'stud',
+    rng: () => number = Math.random,
+  ) {
     this.settings = settings
+    this.gameKind = gameKind
     this.rng = rng
     this.stakes = effectiveStakesFromSettings(settings, 0)
   }
@@ -333,7 +346,7 @@ export class StudEngine {
         this.players[i].up[0],
         this.players[bi].up[0],
       )
-      if (c < 0) bi = i
+      if (this.gameKind === 'stud' ? c < 0 : c > 0) bi = i
     }
     this.bringInIndex = bi
     const bring = Math.min(this.stakes.bringIn, this.players[bi].stack)
@@ -411,18 +424,32 @@ export class StudEngine {
       .filter(({ p }) => !p.folded)
     if (alive.length === 0) return 0
     let bestScore = bestVisibleScore(this.players[alive[0].i].up)
+    let bestRazz = razzVisibleScore(this.players[alive[0].i].up)
     let bestIdx = alive[0].i
     for (const { i } of alive.slice(1)) {
-      const s = bestVisibleScore(this.players[i].up)
-      if (!bestScore || (s && compareScores(s, bestScore) > 0)) {
-        bestScore = s
-        bestIdx = i
+      if (this.gameKind === 'stud') {
+        const s = bestVisibleScore(this.players[i].up)
+        if (!bestScore || (s && compareScores(s, bestScore) > 0)) {
+          bestScore = s
+          bestIdx = i
+        }
+      } else {
+        const s = razzVisibleScore(this.players[i].up)
+        if (compareRazzLowScores(s, bestRazz) > 0) {
+          bestRazz = s
+          bestIdx = i
+        }
       }
     }
     const tied: number[] = []
     for (const { i } of alive) {
-      const s = bestVisibleScore(this.players[i].up)
-      if (s && bestScore && compareScores(s, bestScore) === 0) tied.push(i)
+      if (this.gameKind === 'stud') {
+        const s = bestVisibleScore(this.players[i].up)
+        if (s && bestScore && compareScores(s, bestScore) === 0) tied.push(i)
+      } else {
+        const s = razzVisibleScore(this.players[i].up)
+        if (compareRazzLowScores(s, bestRazz) === 0) tied.push(i)
+      }
     }
     tied.sort(
       (a, b) =>
@@ -550,13 +577,23 @@ export class StudEngine {
     for (const layer of layers) {
       const eligible = contenders.filter((p) => layer.eligibleIds.includes(p.id))
       let best: ReturnType<typeof bestHandScore> = null
+      let bestLow: ReturnType<typeof bestRazzLowScore> = null
       for (const p of eligible) {
-        const s = bestHandScore([...p.hole, ...p.up])
-        if (!best || (s && compareScores(s, best) > 0)) best = s
+        if (this.gameKind === 'stud') {
+          const s = bestHandScore([...p.hole, ...p.up])
+          if (!best || (s && compareScores(s, best) > 0)) best = s
+        } else {
+          const s = bestRazzLowScore([...p.hole, ...p.up])
+          if (!bestLow || (s && compareRazzLowScores(s, bestLow) > 0)) bestLow = s
+        }
       }
       const winners = eligible.filter((p) => {
-        const s = bestHandScore([...p.hole, ...p.up])
-        return s && best && compareScores(s, best) === 0
+        if (this.gameKind === 'stud') {
+          const s = bestHandScore([...p.hole, ...p.up])
+          return s && best && compareScores(s, best) === 0
+        }
+        const s = bestRazzLowScore([...p.hole, ...p.up])
+        return s && bestLow && compareRazzLowScores(s, bestLow) === 0
       })
       const share = Math.floor(layer.amount / winners.length)
       let rem = layer.amount - share * winners.length
@@ -566,8 +603,16 @@ export class StudEngine {
         w.stack += add
       }
       const names = winners.map((w) => w.name).join(', ')
+      const scoreLabel =
+        this.gameKind === 'stud'
+          ? best
+            ? handLabel(best)
+            : null
+          : bestLow
+            ? razzHandLabel(bestLow)
+            : null
       lines.push(
-        `${layer.amount} → ${names}${best ? ` (${handLabel(best)})` : ''}`,
+        `${layer.amount} → ${names}${scoreLabel ? ` (${scoreLabel})` : ''}`,
       )
     }
     this.pot = 0
@@ -757,17 +802,15 @@ export class StudEngine {
         : this.settings.difficulty === 'medium'
           ? 190
           : 320
-    const showdownEquity = estimateStudShowdownEquity(
-      this.players.map((pl) => ({
-        hole: pl.hole,
-        up: pl.up,
-        folded: pl.folded,
-      })),
-      i,
-      pool,
-      mcIters,
-      this.rng,
-    )
+    const playersForEquity = this.players.map((pl) => ({
+      hole: pl.hole,
+      up: pl.up,
+      folded: pl.folded,
+    }))
+    const showdownEquity =
+      this.gameKind === 'stud'
+        ? estimateStudShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
+        : estimateRazzShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
 
     const aliveInBettingOrbit = this.players.filter(
       (pl) => !pl.folded && !pl.allIn,
@@ -786,6 +829,7 @@ export class StudEngine {
     }
 
     return {
+      gameKind: this.gameKind,
       difficulty: this.settings.difficulty,
       hole: p.hole,
       up: p.up,

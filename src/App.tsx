@@ -15,13 +15,16 @@ import {
 import type { Card } from './game/cards'
 import { isRedSuit, rankDisplay, suitSymbol } from './game/cards'
 import { handLabel, bestHandScore } from './game/pokerRank'
-import { loadSettings, saveSettings } from './settings/storage'
+import { bestRazzLowScore, razzHandLabel } from './game/razzRank'
+import { loadSettings, saveSettingsForGame } from './settings/storage'
 import {
   DEFAULT_SETTINGS,
+  GAME_LABELS,
   MAX_STARTING_STACK,
   MIN_STARTING_STACK,
   STAKES_BY_TIER,
   TEMPO_HANDS_BY_PRESET,
+  type GameKind,
   type GameSettings,
 } from './settings/types'
 import './App.css'
@@ -266,39 +269,46 @@ function SessionStatsSummary({ stats }: { stats: SessionStats }) {
 type Screen = 'menu' | 'settings' | 'play'
 
 interface ActiveGame {
+  gameKind: GameKind
   engine: StudEngine
   snap: StudSnapshot
 }
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu')
-  const [settings, setSettings] = useState<GameSettings>(() => loadSettings())
+  const [selectedGame, setSelectedGame] = useState<GameKind>('stud')
+  const [settingsByGame, setSettingsByGame] = useState<Record<GameKind, GameSettings>>(() => ({
+    stud: loadSettings('stud'),
+    razz: loadSettings('razz'),
+  }))
   const [game, setGame] = useState<ActiveGame | null>(null)
+  const activeSettings = settingsByGame[selectedGame]
 
   const refresh = useCallback(() => {
-    setGame((g) => (g ? { engine: g.engine, snap: g.engine.snapshot() } : null))
+    setGame((g) => (g ? { gameKind: g.gameKind, engine: g.engine, snap: g.engine.snapshot() } : null))
   }, [])
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback((gameKind: GameKind) => {
     unlockBettingAudio()
-    const engine = new StudEngine(settings)
+    const engine = new StudEngine(settingsByGame[gameKind], gameKind)
     engine.startSession()
     engine.beginHand()
-    setGame({ engine, snap: engine.snapshot() })
+    setGame({ gameKind, engine, snap: engine.snapshot() })
     setScreen('play')
-  }, [settings])
+  }, [settingsByGame])
 
-  const applySettings = useCallback((next: GameSettings) => {
-    setSettings(next)
-    saveSettings(next)
+  const applySettings = useCallback((gameKind: GameKind, next: GameSettings) => {
+    setSettingsByGame((prev) => ({ ...prev, [gameKind]: next }))
+    saveSettingsForGame(gameKind, next)
     setScreen('menu')
   }, [])
 
   if (screen === 'settings') {
     return (
       <SettingsScreen
-        initial={settings}
-        onSave={applySettings}
+        gameKind={selectedGame}
+        initial={activeSettings}
+        onSave={(next) => applySettings(selectedGame, next)}
         onCancel={() => setScreen('menu')}
       />
     )
@@ -321,38 +331,55 @@ export default function App() {
     <div className="app shell shell--menu">
       <div className="menu-stack">
         <header className="topbar topbar--menu">
-          <h1>Seven Card Stud</h1>
+          <h1>Cardroom Engine</h1>
           <p className="tagline">
-            Ante, bring-in, fixed limit — play money only.
+            Fixed-limit stud variants — play money only.
           </p>
         </header>
         <div className="menu-actions-wrap">
           <div className="menu-main menu-main--actions">
-            <button type="button" className="btn primary" onClick={startGame}>
-              New table
+            <button
+              type="button"
+              className={['btn', selectedGame === 'stud' ? 'primary' : 'ghost'].join(' ')}
+              onClick={() => {
+                setSelectedGame('stud')
+                startGame('stud')
+              }}
+            >
+              Play {GAME_LABELS.stud}
+            </button>
+            <button
+              type="button"
+              className={['btn', selectedGame === 'razz' ? 'primary' : 'ghost'].join(' ')}
+              onClick={() => {
+                setSelectedGame('razz')
+                startGame('razz')
+              }}
+            >
+              Play {GAME_LABELS.razz}
             </button>
             <button
               type="button"
               className="btn ghost"
               onClick={() => setScreen('settings')}
             >
-              Settings
+              {GAME_LABELS[selectedGame]} settings
             </button>
           </div>
         </div>
         <section className="menu-meta">
-          <h2>Current setup</h2>
+          <h2>Current setup ({GAME_LABELS[selectedGame]})</h2>
           <ul>
-            <li>Opponents: {settings.opponentCount}</li>
-            <li>Difficulty: {settings.difficulty}</li>
+            <li>Opponents: {activeSettings.opponentCount}</li>
+            <li>Difficulty: {activeSettings.difficulty}</li>
             <li>
               Tempo:{' '}
-              {settings.useAdvancedTempo
-                ? `${settings.handsPerLevel} hands / level`
-                : settings.tempoPreset}
+              {activeSettings.useAdvancedTempo
+                ? `${activeSettings.handsPerLevel} hands / level`
+                : activeSettings.tempoPreset}
             </li>
-            <li>Stakes: {settings.stakes}</li>
-            <li>Starting stack (each): {settings.startingStack}</li>
+            <li>Stakes: {activeSettings.stakes}</li>
+            <li>Starting stack (each): {activeSettings.startingStack}</li>
           </ul>
         </section>
       </div>
@@ -377,10 +404,12 @@ function startingStackFieldError(raw: string): string | null {
 }
 
 function SettingsScreen({
+  gameKind,
   initial,
   onSave,
   onCancel,
 }: {
+  gameKind: GameKind
   initial: GameSettings
   onSave: (s: GameSettings) => void
   onCancel: () => void
@@ -395,7 +424,7 @@ function SettingsScreen({
   return (
     <div className="app shell settings-screen">
       <header className="topbar">
-        <h1>Settings</h1>
+        <h1>{GAME_LABELS[gameKind]} settings</h1>
       </header>
       <form
         className="settings-form"
@@ -575,6 +604,7 @@ function PlayScreen({
   onQuit: () => void
 }) {
   const { engine, snap } = game
+  const gameName = GAME_LABELS[game.gameKind]
   const { narrow: narrowTable, aiPauseMs } = usePlayTableLayout()
   const [aiDrive, setAiDrive] = useState(0)
 
@@ -736,7 +766,18 @@ function PlayScreen({
         </div>
       ) : null
     const best =
-      showAllHoles && !p.folded ? bestHandScore([...p.hole, ...p.up]) : null
+      showAllHoles && !p.folded
+        ? game.gameKind === 'stud'
+          ? bestHandScore([...p.hole, ...p.up])
+          : bestRazzLowScore([...p.hole, ...p.up])
+        : null
+    let bestText: string | null = null
+    if (best) {
+      bestText =
+        game.gameKind === 'stud'
+          ? handLabel(best as NonNullable<ReturnType<typeof bestHandScore>>)
+          : razzHandLabel(best as NonNullable<ReturnType<typeof bestRazzLowScore>>)
+    }
     return (
       <div
         className={[
@@ -768,7 +809,7 @@ function PlayScreen({
         ) : null}
         <div className="stack">Stack {p.stack}</div>
         {heroSeat ? heroLine : oppOrSummaryLine}
-        {best ? <div className="best-hand">{handLabel(best)}</div> : null}
+        {bestText ? <div className="best-hand">{bestText}</div> : null}
       </div>
     )
   }
@@ -778,7 +819,7 @@ function PlayScreen({
       <header className="play-bar">
         <div>
           <strong>Hand {snap.handNumber}</strong>
-          <span className="muted"> · Level {snap.level}</span>
+          <span className="muted"> · {gameName} · Level {snap.level}</span>
         </div>
         <div className="play-bar-right">
           <span className="pot">Pot {snap.pot}</span>
@@ -830,7 +871,7 @@ function PlayScreen({
         <div className="under-felt">
           <div className="street-pill">
             {snap.phase === 'betting'
-              ? `Street ${snap.street} · Ante ${snap.stakes.ante} · Small ${snap.stakes.smallBet} · Big ${snap.stakes.bigBet}`
+              ? `${gameName} · Street ${snap.street} · Ante ${snap.stakes.ante} · Small ${snap.stakes.smallBet} · Big ${snap.stakes.bigBet}`
               : snap.phase}
           </div>
 

@@ -1,10 +1,13 @@
 import type { Difficulty } from '../settings/types'
+import type { GameKind } from '../settings/types'
 import type { Card } from './cards'
 import { bestHandScore, compareScores, type HandScore } from './pokerRank'
+import { bestRazzLowScore, compareRazzLowScores, type RazzLowScore } from './razzRank'
 
 export type AiAction = 'fold' | 'check' | 'call' | 'raise'
 
 export interface AiContext {
+  gameKind: GameKind
   difficulty: Difficulty
   hole: Card[]
   up: Card[]
@@ -42,6 +45,18 @@ function handStrength01(score: HandScore | null): number {
   return Math.min(1, cat * 0.82 + k * 0.18)
 }
 
+function razzStrength01(score: RazzLowScore | null): number {
+  if (!score) return 0
+  const [a, b, c, d, e] = score
+  const penalty =
+    ((a - 1) / 12) * 0.55 +
+    ((b - 1) / 12) * 0.2 +
+    ((c - 1) / 12) * 0.13 +
+    ((d - 1) / 12) * 0.08 +
+    ((e - 1) / 12) * 0.04
+  return Math.max(0, Math.min(1, 1 - penalty))
+}
+
 function playStrength(full: number, visible: number): number {
   return Math.max(full, visible * 0.88 + full * 0.12)
 }
@@ -54,10 +69,18 @@ function difficultyMargin(d: Difficulty): number {
 
 export function pickAiAction(ctx: AiContext): AiAction {
   const cards = [...ctx.hole, ...ctx.up]
-  const scoreFull = bestHandScore(cards)
-  const scoreVis = bestHandScore(ctx.up)
-  let s = handStrength01(scoreFull)
-  const v = handStrength01(scoreVis)
+  const scoreFullHigh = bestHandScore(cards)
+  const scoreVisHigh = bestHandScore(ctx.up)
+  const scoreFullLow = bestRazzLowScore(cards)
+  const scoreVisLow = bestRazzLowScore(ctx.up)
+  let s =
+    ctx.gameKind === 'razz'
+      ? razzStrength01(scoreFullLow)
+      : handStrength01(scoreFullHigh)
+  const v =
+    ctx.gameKind === 'razz'
+      ? razzStrength01(scoreVisLow)
+      : handStrength01(scoreVisHigh)
   s += noise(ctx.difficulty)
   s = Math.max(0, Math.min(1, s))
   const p = playStrength(s, v)
@@ -166,4 +189,13 @@ export function compareAiHand(a: Card[], b: Card[]): number {
   if (!sa) return -1
   if (!sb) return 1
   return compareScores(sa, sb)
+}
+
+export function compareRazzAiHand(a: Card[], b: Card[]): number {
+  const sa = bestRazzLowScore(a)
+  const sb = bestRazzLowScore(b)
+  if (!sa && !sb) return 0
+  if (!sa) return -1
+  if (!sb) return 1
+  return compareRazzLowScores(sa, sb)
 }

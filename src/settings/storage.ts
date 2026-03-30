@@ -3,21 +3,35 @@ import {
   MAX_STARTING_STACK,
   MIN_STARTING_STACK,
   STAKES_BY_TIER,
+  type GameKind,
   type GameSettings,
   type StakesTier,
 } from './types'
 
-const KEY = 'seven-stud-settings-v1'
+const LEGACY_STUD_KEY = 'seven-stud-settings-v1'
+const KEY_BY_GAME: Record<GameKind, string> = {
+  stud: 'cardroom-settings-stud-v1',
+  razz: 'cardroom-settings-razz-v1',
+}
 
 function defaultStackForStakes(stakes: StakesTier): number {
   return STAKES_BY_TIER[stakes].startingStack
 }
 
-export function loadSettings(): GameSettings {
+export function loadSettings(game: GameKind): GameSettings {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return { ...DEFAULT_SETTINGS }
-    const p = JSON.parse(raw) as Partial<GameSettings>
+    const key = KEY_BY_GAME[game]
+    const raw = localStorage.getItem(key)
+    if (!raw && game === 'stud') {
+      const legacy = localStorage.getItem(LEGACY_STUD_KEY)
+      if (legacy) {
+        localStorage.setItem(key, legacy)
+        localStorage.removeItem(LEGACY_STUD_KEY)
+      }
+    }
+    const fromStore = localStorage.getItem(key)
+    if (!fromStore) return { ...DEFAULT_SETTINGS }
+    const p = JSON.parse(fromStore) as Partial<GameSettings>
     const stakes = (p.stakes ?? DEFAULT_SETTINGS.stakes) as StakesTier
     const tierDefault = defaultStackForStakes(stakes)
     const rawStack =
@@ -44,7 +58,11 @@ export function loadSettings(): GameSettings {
 }
 
 export function saveSettings(s: GameSettings): void {
-  localStorage.setItem(KEY, JSON.stringify(s))
+  saveSettingsForGame('stud', s)
+}
+
+export function saveSettingsForGame(game: GameKind, s: GameSettings): void {
+  localStorage.setItem(KEY_BY_GAME[game], JSON.stringify(s))
 }
 
 function clamp(n: number, lo: number, hi: number): number {

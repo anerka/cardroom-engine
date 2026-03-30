@@ -1,4 +1,10 @@
 export type StakesTier = 'low' | 'mid' | 'high'
+export type GameKind = 'stud' | 'razz'
+
+export const GAME_LABELS: Record<GameKind, string> = {
+  stud: 'Seven Card Stud',
+  razz: 'Razz',
+}
 
 /** Minimum user-configurable starting stack per player. */
 export const MIN_STARTING_STACK = 100
