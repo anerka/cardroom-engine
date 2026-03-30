@@ -1,6 +1,7 @@
 import { pickAiAction, type AiContext } from './ai'
 import {
   buildUnknownPoolForViewer,
+  estimateStudHiLoShowdownEquity,
   estimateRazzShowdownEquity,
   estimateStudShowdownEquity,
 } from './studEquity'
@@ -13,6 +14,11 @@ import {
   razzHandLabel,
   razzVisibleScore,
 } from './razzRank'
+import {
+  bestEightOrBetterLowScore,
+  compareHiLoLowScores,
+  hiLoLowHandLabel,
+} from './hiloRank'
 import { buildPotLayers } from './sidePots'
 import type { GameKind, GameSettings } from '../settings/types'
 import {
@@ -346,7 +352,7 @@ export class StudEngine {
         this.players[i].up[0],
         this.players[bi].up[0],
       )
-      if (this.gameKind === 'stud' ? c < 0 : c > 0) bi = i
+      if (this.gameKind === 'razz' ? c > 0 : c < 0) bi = i
     }
     this.bringInIndex = bi
     const bring = Math.min(this.stakes.bringIn, this.players[bi].stack)
@@ -427,28 +433,28 @@ export class StudEngine {
     let bestRazz = razzVisibleScore(this.players[alive[0].i].up)
     let bestIdx = alive[0].i
     for (const { i } of alive.slice(1)) {
-      if (this.gameKind === 'stud') {
-        const s = bestVisibleScore(this.players[i].up)
-        if (!bestScore || (s && compareScores(s, bestScore) > 0)) {
-          bestScore = s
-          bestIdx = i
-        }
-      } else {
+      if (this.gameKind === 'razz') {
         const s = razzVisibleScore(this.players[i].up)
         if (compareRazzLowScores(s, bestRazz) > 0) {
           bestRazz = s
+          bestIdx = i
+        }
+      } else {
+        const s = bestVisibleScore(this.players[i].up)
+        if (!bestScore || (s && compareScores(s, bestScore) > 0)) {
+          bestScore = s
           bestIdx = i
         }
       }
     }
     const tied: number[] = []
     for (const { i } of alive) {
-      if (this.gameKind === 'stud') {
-        const s = bestVisibleScore(this.players[i].up)
-        if (s && bestScore && compareScores(s, bestScore) === 0) tied.push(i)
-      } else {
+      if (this.gameKind === 'razz') {
         const s = razzVisibleScore(this.players[i].up)
         if (compareRazzLowScores(s, bestRazz) === 0) tied.push(i)
+      } else {
+        const s = bestVisibleScore(this.players[i].up)
+        if (s && bestScore && compareScores(s, bestScore) === 0) tied.push(i)
       }
     }
     tied.sort(
@@ -561,6 +567,35 @@ export class StudEngine {
     this.dealerIndex = seatLeftOf(this.dealerIndex, this.players.length)
   }
 
+  private dealerLeftOrder(ids: string[]): string[] {
+    const seatById = new Map(this.players.map((p, i) => [p.id, i]))
+    return [...ids].sort((a, b) => {
+      const ai = seatById.get(a) ?? 0
+      const bi = seatById.get(b) ?? 0
+      const ad = (ai - this.dealerIndex - 1 + this.players.length) % this.players.length
+      const bd = (bi - this.dealerIndex - 1 + this.players.length) % this.players.length
+      return ad - bd
+    })
+  }
+
+  private distributeChipsByDealerOrder(
+    amount: number,
+    winners: TablePlayer[],
+  ): void {
+    if (winners.length === 0 || amount <= 0) return
+    const orderedIds = this.dealerLeftOrder(winners.map((w) => w.id))
+    const ordered = orderedIds
+      .map((id) => winners.find((w) => w.id === id))
+      .filter((w): w is TablePlayer => Boolean(w))
+    const share = Math.floor(amount / ordered.length)
+    let rem = amount - share * ordered.length
+    for (const w of ordered) {
+      const add = share + (rem > 0 ? 1 : 0)
+      if (rem > 0) rem -= 1
+      w.stack += add
+    }
+  }
+
   private runShowdown(): void {
     const contenders = this.players.filter((p) => !p.folded)
     const humanParticipatedInShowdown = contenders.some((p) => p.isHuman)
@@ -578,41 +613,87 @@ export class StudEngine {
       const eligible = contenders.filter((p) => layer.eligibleIds.includes(p.id))
       let best: ReturnType<typeof bestHandScore> = null
       let bestLow: ReturnType<typeof bestRazzLowScore> = null
+      let bestHiLoLow: ReturnType<typeof bestEightOrBetterLowScore> = null
       for (const p of eligible) {
         if (this.gameKind === 'stud') {
           const s = bestHandScore([...p.hole, ...p.up])
           if (!best || (s && compareScores(s, best) > 0)) best = s
-        } else {
+        } else if (this.gameKind === 'razz') {
           const s = bestRazzLowScore([...p.hole, ...p.up])
           if (!bestLow || (s && compareRazzLowScores(s, bestLow) > 0)) bestLow = s
-        }
-      }
-      const winners = eligible.filter((p) => {
-        if (this.gameKind === 'stud') {
+        } else {
           const s = bestHandScore([...p.hole, ...p.up])
-          return s && best && compareScores(s, best) === 0
+          if (!best || (s && compareScores(s, best) > 0)) best = s
+          const l = bestEightOrBetterLowScore([...p.hole, ...p.up])
+          if (l && (!bestHiLoLow || compareHiLoLowScores(l, bestHiLoLow) > 0)) {
+            bestHiLoLow = l
+          }
         }
-        const s = bestRazzLowScore([...p.hole, ...p.up])
-        return s && bestLow && compareRazzLowScores(s, bestLow) === 0
-      })
-      const share = Math.floor(layer.amount / winners.length)
-      let rem = layer.amount - share * winners.length
-      for (const w of winners) {
-        const add = share + (rem > 0 ? 1 : 0)
-        if (rem > 0) rem -= 1
-        w.stack += add
       }
-      const names = winners.map((w) => w.name).join(', ')
-      const scoreLabel =
-        this.gameKind === 'stud'
-          ? best
-            ? handLabel(best)
-            : null
-          : bestLow
-            ? razzHandLabel(bestLow)
-            : null
+      if (this.gameKind !== 'studhilo') {
+        const winners = eligible.filter((p) => {
+          if (this.gameKind === 'stud') {
+            const s = bestHandScore([...p.hole, ...p.up])
+            return s && best && compareScores(s, best) === 0
+          }
+          const s = bestRazzLowScore([...p.hole, ...p.up])
+          return s && bestLow && compareRazzLowScores(s, bestLow) === 0
+        })
+        this.distributeChipsByDealerOrder(layer.amount, winners)
+        const names = winners.map((w) => w.name).join(', ')
+        const scoreLabel =
+          this.gameKind === 'stud'
+            ? best
+              ? handLabel(best)
+              : null
+            : bestLow
+              ? razzHandLabel(bestLow)
+              : null
+        lines.push(
+          `${layer.amount} → ${names}${scoreLabel ? ` (${scoreLabel})` : ''}`,
+        )
+        continue
+      }
+
+      const highWinners = eligible.filter((p) => {
+        const s = bestHandScore([...p.hole, ...p.up])
+        return s && best && compareScores(s, best) === 0
+      })
+      const lowWinners =
+        bestHiLoLow === null
+          ? []
+          : eligible.filter((p) => {
+              const s = bestEightOrBetterLowScore([...p.hole, ...p.up])
+              return s && compareHiLoLowScores(s, bestHiLoLow) === 0
+            })
+
+      if (lowWinners.length === 0) {
+        this.distributeChipsByDealerOrder(layer.amount, highWinners)
+        const names = highWinners.map((w) => w.name).join(', ')
+        lines.push(
+          `${layer.amount} → ${names}${best ? ` (High: ${handLabel(best)})` : ''}`,
+        )
+        continue
+      }
+
+      let highAmount = Math.floor(layer.amount / 2)
+      let lowAmount = Math.floor(layer.amount / 2)
+      if (layer.amount % 2 === 1) {
+        const unionWinnerIds = [...new Set([...highWinners, ...lowWinners].map((w) => w.id))]
+        const firstId = this.dealerLeftOrder(unionWinnerIds)[0]
+        if (firstId && lowWinners.some((w) => w.id === firstId) && !highWinners.some((w) => w.id === firstId)) {
+          lowAmount += 1
+        } else {
+          highAmount += 1
+        }
+      }
+
+      this.distributeChipsByDealerOrder(highAmount, highWinners)
+      this.distributeChipsByDealerOrder(lowAmount, lowWinners)
+      const highNames = highWinners.map((w) => w.name).join(', ')
+      const lowNames = lowWinners.map((w) => w.name).join(', ')
       lines.push(
-        `${layer.amount} → ${names}${scoreLabel ? ` (${scoreLabel})` : ''}`,
+        `${layer.amount} → High: ${highNames}${best ? ` (${handLabel(best)})` : ''} · Low: ${lowNames}${bestHiLoLow ? ` (${hiLoLowHandLabel(bestHiLoLow)})` : ''}`,
       )
     }
     this.pot = 0
@@ -810,7 +891,9 @@ export class StudEngine {
     const showdownEquity =
       this.gameKind === 'stud'
         ? estimateStudShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
-        : estimateRazzShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
+        : this.gameKind === 'razz'
+          ? estimateRazzShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
+          : estimateStudHiLoShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
 
     const aliveInBettingOrbit = this.players.filter(
       (pl) => !pl.folded && !pl.allIn,

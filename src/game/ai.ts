@@ -3,6 +3,7 @@ import type { GameKind } from '../settings/types'
 import type { Card } from './cards'
 import { bestHandScore, compareScores, type HandScore } from './pokerRank'
 import { bestRazzLowScore, compareRazzLowScores, type RazzLowScore } from './razzRank'
+import { bestEightOrBetterLowScore, type HiLoLowScore } from './hiloRank'
 
 export type AiAction = 'fold' | 'check' | 'call' | 'raise'
 
@@ -57,6 +58,18 @@ function razzStrength01(score: RazzLowScore | null): number {
   return Math.max(0, Math.min(1, 1 - penalty))
 }
 
+function hiLoLowStrength01(score: HiLoLowScore | null): number {
+  if (!score) return 0
+  const [a, b, c, d, e] = score
+  const penalty =
+    ((a - 1) / 7) * 0.46 +
+    ((b - 1) / 7) * 0.24 +
+    ((c - 1) / 7) * 0.15 +
+    ((d - 1) / 7) * 0.1 +
+    ((e - 1) / 7) * 0.05
+  return Math.max(0, Math.min(1, 1 - penalty))
+}
+
 function playStrength(full: number, visible: number): number {
   return Math.max(full, visible * 0.88 + full * 0.12)
 }
@@ -73,14 +86,24 @@ export function pickAiAction(ctx: AiContext): AiAction {
   const scoreVisHigh = bestHandScore(ctx.up)
   const scoreFullLow = bestRazzLowScore(cards)
   const scoreVisLow = bestRazzLowScore(ctx.up)
-  let s =
-    ctx.gameKind === 'razz'
-      ? razzStrength01(scoreFullLow)
-      : handStrength01(scoreFullHigh)
-  const v =
-    ctx.gameKind === 'razz'
-      ? razzStrength01(scoreVisLow)
-      : handStrength01(scoreVisHigh)
+  const scoreFullHiLo = bestEightOrBetterLowScore(cards)
+  const scoreVisHiLo = bestEightOrBetterLowScore(ctx.up)
+  let s: number
+  let v: number
+  if (ctx.gameKind === 'razz') {
+    s = razzStrength01(scoreFullLow)
+    v = razzStrength01(scoreVisLow)
+  } else if (ctx.gameKind === 'studhilo') {
+    const high = handStrength01(scoreFullHigh)
+    const low = hiLoLowStrength01(scoreFullHiLo)
+    const visHigh = handStrength01(scoreVisHigh)
+    const visLow = hiLoLowStrength01(scoreVisHiLo)
+    s = high * 0.54 + low * 0.46
+    v = visHigh * 0.52 + visLow * 0.48
+  } else {
+    s = handStrength01(scoreFullHigh)
+    v = handStrength01(scoreVisHigh)
+  }
   s += noise(ctx.difficulty)
   s = Math.max(0, Math.min(1, s))
   const p = playStrength(s, v)

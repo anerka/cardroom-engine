@@ -16,6 +16,7 @@ import type { Card } from './game/cards'
 import { isRedSuit, rankDisplay, suitSymbol } from './game/cards'
 import { handLabel, bestHandScore } from './game/pokerRank'
 import { bestRazzLowScore, razzHandLabel } from './game/razzRank'
+import { bestEightOrBetterLowScore, hiLoLowHandLabel } from './game/hiloRank'
 import { loadSettings, saveSettingsForGame } from './settings/storage'
 import {
   DEFAULT_SETTINGS,
@@ -280,6 +281,7 @@ export default function App() {
   const [settingsByGame, setSettingsByGame] = useState<Record<GameKind, GameSettings>>(() => ({
     stud: loadSettings('stud'),
     razz: loadSettings('razz'),
+    studhilo: loadSettings('studhilo'),
   }))
   const [game, setGame] = useState<ActiveGame | null>(null)
   const activeSettings = settingsByGame[selectedGame]
@@ -338,7 +340,7 @@ export default function App() {
         </header>
         <div className="menu-actions-wrap">
           <div className="menu-main menu-main--actions">
-            {(['stud', 'razz'] as const).map((gameKind) => (
+            {(['stud', 'razz', 'studhilo'] as const).map((gameKind) => (
               <div key={gameKind} className="menu-game-row">
                 <button
                   type="button"
@@ -764,18 +766,20 @@ function PlayScreen({
           </div>
         </div>
       ) : null
-    const best =
-      showAllHoles && !p.folded
-        ? game.gameKind === 'stud'
-          ? bestHandScore([...p.hole, ...p.up])
-          : bestRazzLowScore([...p.hole, ...p.up])
-        : null
+    const highBest = showAllHoles && !p.folded ? bestHandScore([...p.hole, ...p.up]) : null
+    const razzBest = showAllHoles && !p.folded ? bestRazzLowScore([...p.hole, ...p.up]) : null
+    const hiLoLowBest =
+      showAllHoles && !p.folded ? bestEightOrBetterLowScore([...p.hole, ...p.up]) : null
     let bestText: string | null = null
-    if (best) {
-      bestText =
-        game.gameKind === 'stud'
-          ? handLabel(best as NonNullable<ReturnType<typeof bestHandScore>>)
-          : razzHandLabel(best as NonNullable<ReturnType<typeof bestRazzLowScore>>)
+    if (showAllHoles && !p.folded) {
+      if (game.gameKind === 'stud' && highBest) {
+        bestText = handLabel(highBest)
+      } else if (game.gameKind === 'razz' && razzBest) {
+        bestText = razzHandLabel(razzBest)
+      } else if (game.gameKind === 'studhilo' && highBest) {
+        const lowText = hiLoLowBest ? ` / ${hiLoLowHandLabel(hiLoLowBest)}` : ''
+        bestText = `${handLabel(highBest)}${lowText}`
+      }
     }
     return (
       <div
