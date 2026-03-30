@@ -16,6 +16,8 @@ export interface AiContext {
   stack: number
   street: 3 | 4 | 5 | 6 | 7
   activeOpponents: number
+  /** True when only one opponent remains (heads-up). */
+  headsUp: boolean
   raisesThisStreet: number
   humanIsLastAggressor: boolean
   /** Monte Carlo P(share pot at showdown) from fair information only (~0–1). */
@@ -114,12 +116,14 @@ export function pickAiAction(ctx: AiContext): AiAction {
     const potAfter = ctx.pot + ctx.toCall
     const potShare = ctx.toCall / potAfter
 
-    const margin =
+    let margin =
       difficultyMargin(ctx.difficulty) +
       (ctx.humanIsLastAggressor ? 0.048 : 0) +
       Math.min(0.065, Math.max(0, ctx.street - 3) * 0.014) +
       (ctx.raisesThisStreet >= 2 ? 0.038 * (ctx.raisesThisStreet - 1) : 0) +
       (ctx.activeOpponents > 2 ? -0.012 : 0)
+    /* Heads-up: pot-odds to call a raise are better, but we still fold more trash. */
+    if (ctx.headsUp) margin += 0.042
 
     const needEquity = potShare + margin
 
@@ -145,7 +149,8 @@ export function pickAiAction(ctx: AiContext): AiAction {
     const eqAdj = eq + noise(ctx.difficulty) * 0.03
     if (eqAdj >= needEquity) return 'call'
 
-    if (eqAdj >= needEquity - 0.035 && Math.random() < 0.12) return 'call'
+    const marginalCallFreq = ctx.headsUp ? 0.055 : 0.12
+    if (eqAdj >= needEquity - 0.035 && Math.random() < marginalCallFreq) return 'call'
 
     return 'fold'
   }

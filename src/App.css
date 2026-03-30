@@ -148,6 +148,11 @@
   font-size: 0.8rem;
 }
 
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .settings-form {
   display: flex;
   flex-direction: column;
@@ -164,6 +169,7 @@
 }
 
 .settings-form input[type='number'],
+.settings-form input[type='text'],
 .settings-form select {
   font: inherit;
   padding: 0.45rem 0.55rem;
@@ -171,6 +177,16 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.25);
   color: inherit;
+}
+
+.settings-form input.field-invalid {
+  border-color: rgba(200, 120, 100, 0.55);
+}
+
+.settings-form__error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #d4a090;
 }
 
 .range-val {
@@ -1028,6 +1044,42 @@
 
   .card.card--hero-sunk {
     margin-top: 0.42rem;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .play {
+    padding-top: 0.4rem;
+    padding-bottom: 0.65rem;
+  }
+
+  .play-bar {
+    padding-bottom: 0.4rem;
+  }
+
+  .status-msg {
+    margin-bottom: 0.5rem;
+    font-size: 0.84rem;
+  }
+
+  .table-wrap,
+  .felt {
+    min-height: min(70vh, 360px);
+  }
+
+  .felt {
+    padding-top: 0.45rem;
+    padding-bottom: clamp(5.7rem, 17vw, 7.2rem);
+  }
+
+  .under-felt {
+    gap: 0.4rem;
+    padding-top: 0.55rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .actions-slot {
+    min-height: 2.5rem;
   }
 }
 

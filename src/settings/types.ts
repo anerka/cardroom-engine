@@ -1,5 +1,10 @@
 export type StakesTier = 'low' | 'mid' | 'high'
 
+/** Minimum user-configurable starting stack per player. */
+export const MIN_STARTING_STACK = 100
+
+export const MAX_STARTING_STACK = 9_999_999
+
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
 export type TempoPreset = 'slow' | 'medium' | 'fast'

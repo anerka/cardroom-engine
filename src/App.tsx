@@ -18,6 +18,8 @@ import { handLabel, bestHandScore } from './game/pokerRank'
 import { loadSettings, saveSettings } from './settings/storage'
 import {
   DEFAULT_SETTINGS,
+  MAX_STARTING_STACK,
+  MIN_STARTING_STACK,
   STAKES_BY_TIER,
   TEMPO_HANDS_BY_PRESET,
   type GameSettings,
@@ -108,17 +110,25 @@ function usePlayTableLayout(): { narrow: boolean; aiPauseMs: number } {
     aiPauseMs: 700,
   }))
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 560px)')
+    const mqNarrowWidth = window.matchMedia('(max-width: 560px)')
+    const mqShortHeight = window.matchMedia('(max-height: 500px)')
     const apply = () => {
-      const narrow = mq.matches
+      /* Landscape phones are short; keep compact table/card sizing there too. */
+      const narrow = mqNarrowWidth.matches || mqShortHeight.matches
       setState({
         narrow,
         aiPauseMs: narrow ? 520 : 680,
       })
     }
-    mq.addEventListener('change', apply)
+    mqNarrowWidth.addEventListener('change', apply)
+    mqShortHeight.addEventListener('change', apply)
+    window.addEventListener('resize', apply)
     apply()
-    return () => mq.removeEventListener('change', apply)
+    return () => {
+      mqNarrowWidth.removeEventListener('change', apply)
+      mqShortHeight.removeEventListener('change', apply)
+      window.removeEventListener('resize', apply)
+    }
   }, [])
   return state
 }
@@ -350,6 +360,22 @@ export default function App() {
   )
 }
 
+function startingStackFieldError(raw: string): string | null {
+  const t = raw.trim()
+  if (t === '') return 'Enter a starting stack (whole number).'
+  const n = Number(t)
+  if (!Number.isFinite(n) || !Number.isInteger(n)) {
+    return 'Use a whole number for starting stack.'
+  }
+  if (n < MIN_STARTING_STACK) {
+    return 'Starting stack must be at least 100.'
+  }
+  if (n > MAX_STARTING_STACK) {
+    return `Starting stack cannot exceed ${MAX_STARTING_STACK.toLocaleString('en-US')}.`
+  }
+  return null
+}
+
 function SettingsScreen({
   initial,
   onSave,
@@ -360,6 +386,11 @@ function SettingsScreen({
   onCancel: () => void
 }) {
   const [draft, setDraft] = useState<GameSettings>(initial)
+  const [startingStackInput, setStartingStackInput] = useState(() =>
+    String(initial.startingStack),
+  )
+  const startingStackError = startingStackFieldError(startingStackInput)
+  const startingStackValid = startingStackError === null
 
   return (
     <div className="app shell settings-screen">
@@ -370,7 +401,9 @@ function SettingsScreen({
         className="settings-form"
         onSubmit={(e) => {
           e.preventDefault()
-          onSave(draft)
+          if (!startingStackValid) return
+          const stack = Number(startingStackInput.trim())
+          onSave({ ...draft, startingStack: stack })
         }}
       >
         <label>
@@ -464,11 +497,13 @@ function SettingsScreen({
             value={draft.stakes}
             onChange={(e) => {
               const stakes = e.target.value as GameSettings['stakes']
+              const tierStack = STAKES_BY_TIER[stakes].startingStack
               setDraft((d) => ({
                 ...d,
                 stakes,
-                startingStack: STAKES_BY_TIER[stakes].startingStack,
+                startingStack: tierStack,
               }))
+              setStartingStackInput(String(tierStack))
             }}
           >
             <option value="low">Low</option>
@@ -480,23 +515,30 @@ function SettingsScreen({
         <label>
           Starting stack (each player)
           <input
-            type="number"
-            min={20}
-            max={9999999}
-            step={10}
-            value={draft.startingStack}
-            onChange={(e) =>
-              setDraft((d) => ({
-                ...d,
-                startingStack: Math.max(
-                  20,
-                  Math.min(9_999_999, Number(e.target.value) || DEFAULT_SETTINGS.startingStack),
-                ),
-              }))
+            id="settings-starting-stack"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            className={startingStackError ? 'field-invalid' : undefined}
+            aria-invalid={startingStackError ? true : undefined}
+            aria-describedby={
+              startingStackError ? 'settings-starting-stack-error' : undefined
             }
+            value={startingStackInput}
+            onChange={(e) => setStartingStackInput(e.target.value)}
           />
+          {startingStackError ? (
+            <p
+              id="settings-starting-stack-error"
+              className="settings-form__error"
+              role="alert"
+            >
+              {startingStackError}
+            </p>
+          ) : null}
           <span className="hint">
-            (Tier default: {STAKES_BY_TIER[draft.stakes].startingStack})
+            Minimum {MIN_STARTING_STACK.toLocaleString('en-US')} chips per player. Tier default:{' '}
+            {STAKES_BY_TIER[draft.stakes].startingStack}.
           </span>
         </label>
 
@@ -507,7 +549,11 @@ function SettingsScreen({
         </p>
 
         <div className="form-actions">
-          <button type="submit" className="btn primary">
+          <button
+            type="submit"
+            className="btn primary"
+            disabled={!startingStackValid}
+          >
             Save
           </button>
           <button type="button" className="btn ghost" onClick={onCancel}>
@@ -565,7 +611,30 @@ function PlayScreen({
     snap.phase,
   ])
 
+  /* Only legal action is check (e.g. all-in runout) — no pointless tap. */
+  useEffect(() => {
+    if (snap.phase !== 'betting' || !snap.humanMustAct) return
+    if (!engine.snapshot().humanMustAct) return
+    const actions = engine.legalHumanActions()
+    if (actions.length === 1 && actions[0] === 'check') {
+      engine.applyHuman({ type: 'check' })
+      onRefresh()
+    }
+  }, [
+    snap.phase,
+    snap.humanMustAct,
+    snap.actionIndex,
+    snap.street,
+    snap.raisesThisStreet,
+    snap.handNumber,
+    snap.pot,
+    engine,
+    onRefresh,
+  ])
+
   const legal = snap.humanMustAct ? engine.legalHumanActions() : []
+  const onlyAutoCheck =
+    snap.humanMustAct && legal.length === 1 && legal[0] === 'check'
 
   const act = (a: HumanAction) => {
     const before = engine.snapshot().bettingSoundNonce
@@ -779,8 +848,12 @@ function PlayScreen({
             </>
           ) : null}
 
-          <div className="actions-slot">
-            {snap.humanMustAct ? (
+          <div
+            className="actions-slot"
+            aria-busy={onlyAutoCheck || undefined}
+            aria-label={onlyAutoCheck ? 'Continuing hand' : undefined}
+          >
+            {snap.humanMustAct && !onlyAutoCheck ? (
               <div className="actions-bar">
                 {legal.includes('fold') ? (
                   <button type="button" className="btn danger" onClick={() => act({ type: 'fold' })}>

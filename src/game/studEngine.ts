@@ -467,6 +467,7 @@ export class StudEngine {
   }
 
   private dealNextStreet(): void {
+    this.normalizeAllInFromStack()
     for (const p of this.players) {
       if (p.folded) continue
       if (this.street <= 5) {
@@ -657,19 +658,19 @@ export class StudEngine {
     const p = this.players[i]
     const toCall = Math.max(0, this.highBet - p.streetCommit)
     const canRaise = this.canFullRaise(i) || this.canShortAllInRaise(i)
-    const out: HumanAction['type'][] = ['fold']
+    /* No fold when you can check for free — folding is never better than checking. */
     if (this.checkRound && this.highBet === 0) {
-      out.push('check')
+      const out: HumanAction['type'][] = ['check']
       if (canRaise) out.push('raise')
       return out
     }
     if (toCall === 0) {
-      out.push('check')
+      const out: HumanAction['type'][] = ['check']
       if (canRaise) out.push('raise')
-    } else {
-      out.push('call')
-      if (canRaise) out.push('raise')
+      return out
     }
+    const out: HumanAction['type'][] = ['fold', 'call']
+    if (canRaise) out.push('raise')
     return out
   }
 
@@ -677,6 +678,7 @@ export class StudEngine {
   private clampAiAction(seat: number, want: HumanAction): HumanAction {
     const legal = this.legalActionTypesForSeat(seat)
     if (legal.includes(want.type)) return want
+    if (want.type === 'fold' && legal.includes('check')) return { type: 'check' }
     if (legal.includes('call')) return { type: 'call' }
     if (legal.includes('check')) return { type: 'check' }
     if (legal.includes('raise')) return { type: 'raise' }
@@ -795,6 +797,7 @@ export class StudEngine {
       stack: p.stack,
       street: this.street,
       activeOpponents,
+      headsUp: activeOpponents === 1,
       raisesThisStreet: this.raisesThisStreet,
       humanIsLastAggressor,
       showdownEquity,
@@ -802,7 +805,17 @@ export class StudEngine {
     }
   }
 
+  private normalizeAllInFromStack(): void {
+    for (const p of this.players) {
+      if (!p.folded && p.stack <= 0) {
+        p.stack = 0
+        p.allIn = true
+      }
+    }
+  }
+
   private applyAction(i: number, a: HumanAction): void {
+    this.normalizeAllInFromStack()
     const p = this.players[i]
     const toCall = Math.max(0, this.highBet - p.streetCommit)
 
@@ -875,6 +888,7 @@ export class StudEngine {
   }
 
   private afterAction(fromSeat: number): void {
+    this.normalizeAllInFromStack()
     const alive = this.players.filter((p) => !p.folded)
     if (alive.length === 1) {
       this.awardPotToSingle(alive[0].id)

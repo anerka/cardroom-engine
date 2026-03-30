@@ -1,5 +1,7 @@
 import {
   DEFAULT_SETTINGS,
+  MAX_STARTING_STACK,
+  MIN_STARTING_STACK,
   STAKES_BY_TIER,
   type GameSettings,
   type StakesTier,
@@ -34,7 +36,7 @@ export function loadSettings(): GameSettings {
         1,
         99,
       ),
-      startingStack: clamp(rawStack, 20, 9_999_999),
+      startingStack: clamp(rawStack, MIN_STARTING_STACK, MAX_STARTING_STACK),
     }
   } catch {
     return { ...DEFAULT_SETTINGS }
