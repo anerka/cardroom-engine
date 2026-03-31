@@ -4,6 +4,8 @@ import type { Card } from './cards'
 import { bestHandScore, compareScores, type HandScore } from './pokerRank'
 import { bestRazzLowScore, compareRazzLowScores, type RazzLowScore } from './razzRank'
 import { bestEightOrBetterLowScore, type HiLoLowScore } from './hiloRank'
+import { bestBadugiScore, compareBadugiScores, type BadugiScore } from './badugiRank'
+import { bestDeuceToSevenLowScore, compareDeuceScores, type DeuceLowScore } from './deuceRank'
 
 export type AiAction = 'fold' | 'check' | 'call' | 'raise'
 
@@ -71,6 +73,32 @@ function hiLoLowStrength01(score: HiLoLowScore | null): number {
   return Math.max(0, Math.min(1, 1 - penalty))
 }
 
+function badugiStrength01(score: BadugiScore | null): number {
+  if (!score) return 0
+  const [cards, a, b, c, d] = score
+  const cardBonus = cards / 4
+  const penalty =
+    ((a - 1) / 12) * 0.45 +
+    ((b - 1) / 12) * 0.24 +
+    ((c - 1) / 12) * 0.18 +
+    ((d - 1) / 12) * 0.13
+  return Math.max(0, Math.min(1, cardBonus * 0.6 + (1 - penalty) * 0.4))
+}
+
+function deuceStrength01(score: DeuceLowScore | null): number {
+  if (!score) return 0
+  const [cat, pair, a, b, c, d, e] = score
+  const penalty =
+    cat * 0.34 +
+    pair * 0.2 +
+    ((a - 2) / 12) * 0.22 +
+    ((b - 2) / 12) * 0.12 +
+    ((c - 2) / 12) * 0.07 +
+    ((d - 2) / 12) * 0.035 +
+    ((e - 2) / 12) * 0.015
+  return Math.max(0, Math.min(1, 1 - penalty))
+}
+
 function playStrength(full: number, visible: number): number {
   return Math.max(full, visible * 0.88 + full * 0.12)
 }
@@ -89,6 +117,8 @@ export function pickAiAction(ctx: AiContext): AiAction {
   const scoreVisLow = bestRazzLowScore(ctx.up)
   const scoreFullHiLo = bestEightOrBetterLowScore(cards)
   const scoreVisHiLo = bestEightOrBetterLowScore(ctx.up)
+  const scoreFullBadugi = bestBadugiScore(ctx.hole)
+  const scoreFullDeuce = bestDeuceToSevenLowScore(ctx.hole)
   let s: number
   let v: number
   if (ctx.gameKind === 'razz') {
@@ -101,6 +131,12 @@ export function pickAiAction(ctx: AiContext): AiAction {
     const visLow = hiLoLowStrength01(scoreVisHiLo)
     s = high * 0.54 + low * 0.46
     v = visHigh * 0.52 + visLow * 0.48
+  } else if (ctx.gameKind === 'badugi') {
+    s = badugiStrength01(scoreFullBadugi)
+    v = s
+  } else if (ctx.gameKind === 'deuce7') {
+    s = deuceStrength01(scoreFullDeuce)
+    v = s
   } else {
     s = handStrength01(scoreFullHigh)
     v = handStrength01(scoreVisHigh)
@@ -222,4 +258,22 @@ export function compareRazzAiHand(a: Card[], b: Card[]): number {
   if (!sa) return -1
   if (!sb) return 1
   return compareRazzLowScores(sa, sb)
+}
+
+export function compareBadugiAiHand(a: Card[], b: Card[]): number {
+  const sa = bestBadugiScore(a)
+  const sb = bestBadugiScore(b)
+  if (!sa && !sb) return 0
+  if (!sa) return -1
+  if (!sb) return 1
+  return compareBadugiScores(sa, sb)
+}
+
+export function compareDeuceAiHand(a: Card[], b: Card[]): number {
+  const sa = bestDeuceToSevenLowScore(a)
+  const sb = bestDeuceToSevenLowScore(b)
+  if (!sa && !sb) return 0
+  if (!sa) return -1
+  if (!sb) return 1
+  return compareDeuceScores(sa, sb)
 }

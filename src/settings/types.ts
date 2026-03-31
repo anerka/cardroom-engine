@@ -1,10 +1,12 @@
 export type StakesTier = 'low' | 'mid' | 'high'
-export type GameKind = 'stud' | 'razz' | 'studhilo'
+export type GameKind = 'stud' | 'razz' | 'studhilo' | 'badugi' | 'deuce7'
 
 export const GAME_LABELS: Record<GameKind, string> = {
   stud: 'Seven Card Stud',
   razz: 'Razz',
   studhilo: 'Stud Hi/Low',
+  badugi: 'Badugi',
+  deuce7: '2-7 Triple Draw',
 }
 
 /** Minimum user-configurable starting stack per player. */

@@ -173,6 +173,18 @@
   cursor: not-allowed;
 }
 
+.card-discard-pick {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.card-discard-pick--selected {
+  box-shadow: 0 0 0 2px rgba(73, 171, 109, 0.9);
+}
+
 .settings-form {
   display: flex;
   flex-direction: column;

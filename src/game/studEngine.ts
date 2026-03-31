@@ -19,6 +19,16 @@ import {
   compareHiLoLowScores,
   hiLoLowHandLabel,
 } from './hiloRank'
+import {
+  bestBadugiScore,
+  compareBadugiScores,
+  badugiHandLabel,
+} from './badugiRank'
+import {
+  bestDeuceToSevenLowScore,
+  compareDeuceScores,
+  deuceHandLabel,
+} from './deuceRank'
 import { buildPotLayers } from './sidePots'
 import type { GameKind, GameSettings } from '../settings/types'
 import {
@@ -47,6 +57,7 @@ export type SessionPhase =
   | 'idle'
   | 'betweenHands'
   | 'betting'
+  | 'draw'
   | 'showdown'
   | 'handSummary'
   | 'youWonTable'
@@ -138,6 +149,7 @@ export type HumanAction =
   | { type: 'check' }
   | { type: 'call' }
   | { type: 'raise' }
+  | { type: 'draw'; count: number; discardIndices?: number[] }
 
 function seatLeftOf(i: number, n: number): number {
   return (i + 1) % n
@@ -161,6 +173,10 @@ function effectiveStakesFromSettings(
 function handsPerLevel(settings: GameSettings): number {
   if (settings.useAdvancedTempo) return settings.handsPerLevel
   return TEMPO_HANDS_BY_PRESET[settings.tempoPreset]
+}
+
+function isDrawGame(gameKind: GameKind): boolean {
+  return gameKind === 'badugi' || gameKind === 'deuce7'
 }
 
 export class StudEngine {
@@ -189,6 +205,8 @@ export class StudEngine {
   private lastAggressorSeat: number | null = null
   private bettingSoundNonce = 0
   private lastBettingSound: BettingSound | null = null
+  private drawRound = 0
+  private drawPending = new Set<number>()
   stakes: EffectiveStakes
 
   constructor(
@@ -204,7 +222,7 @@ export class StudEngine {
 
   snapshot(): StudSnapshot {
     const humanMustAct =
-      this.phase === 'betting' &&
+      (this.phase === 'betting' || this.phase === 'draw') &&
       this.actionIndex !== null &&
       this.players[this.actionIndex]?.isHuman === true
     return {
@@ -341,6 +359,33 @@ export class StudEngine {
       this.pot += pay
     }
 
+    if (isDrawGame(this.gameKind)) {
+      const holeCount = this.gameKind === 'badugi' ? 4 : 5
+      for (const p of this.players) {
+        p.hole = []
+        p.up = []
+        for (let k = 0; k < holeCount; k++) p.hole.push(this.deck.pop()!)
+      }
+      for (const p of this.players) p.streetCommit = 0
+      this.highBet = 0
+      this.raisesThisStreet = 0
+      this.lastAggressorSeat = null
+      this.checkRound = true
+      this.checkPending.clear()
+      const opener = seatLeftOf(this.dealerIndex, this.players.length)
+      for (let k = 0; k < this.players.length; k++) {
+        const i = (opener + k) % this.players.length
+        const p = this.players[i]
+        if (!p.folded && !p.allIn) this.checkPending.add(i)
+      }
+      this.street = 3
+      this.drawRound = 0
+      this.phase = 'betting'
+      this.actionIndex = this.nextActorFrom(opener)
+      this.message = 'Opening betting round.'
+      return
+    }
+
     for (const p of this.players) {
       p.hole = [this.deck.pop()!, this.deck.pop()!]
       p.up = [this.deck.pop()!]
@@ -385,11 +430,16 @@ export class StudEngine {
     this.raisesThisStreet = 0
     this.checkRound = false
     this.checkPending.clear()
+    this.drawPending.clear()
+    this.drawRound = 0
     this.bringInIndex = null
     this.lastAggressorSeat = null
   }
 
   private betUnit(): number {
+    if (isDrawGame(this.gameKind)) {
+      return this.drawRound < 2 ? this.stakes.smallBet : this.stakes.bigBet
+    }
     return this.street <= 4 ? this.stakes.smallBet : this.stakes.bigBet
   }
 
@@ -405,7 +455,7 @@ export class StudEngine {
   }
 
   private nextRaiseTarget(): number {
-    if (this.street === 3 && this.highBet < this.stakes.smallBet) {
+    if (!isDrawGame(this.gameKind) && this.street === 3 && this.highBet < this.stakes.smallBet) {
       return this.stakes.smallBet
     }
     return this.highBet + this.betUnit()
@@ -492,11 +542,63 @@ export class StudEngine {
       this.awardPotToSingle(inHand[0].id)
       return
     }
+    if (isDrawGame(this.gameKind)) {
+      if (this.drawRound >= 3) {
+        this.runShowdown()
+      } else {
+        this.beginDrawRound()
+      }
+      return
+    }
     if (this.street === 7) {
       this.runShowdown()
       return
     }
     this.dealNextStreet()
+  }
+
+  private beginDrawRound(): void {
+    this.phase = 'draw'
+    this.drawRound += 1
+    this.drawPending.clear()
+    const opener = seatLeftOf(this.dealerIndex, this.players.length)
+    for (let k = 0; k < this.players.length; k++) {
+      const i = (opener + k) % this.players.length
+      const p = this.players[i]
+      if (!p.folded && !p.allIn) this.drawPending.add(i)
+    }
+    this.actionIndex = this.nextDrawActorFrom(opener)
+    this.message = `Draw ${this.drawRound}: choose how many cards to draw.`
+    if (this.actionIndex === null) this.finishDrawRound()
+  }
+
+  private nextDrawActorFrom(start: number): number | null {
+    const n = this.players.length
+    for (let k = 0; k < n; k++) {
+      const i = (start + k) % n
+      if (this.drawPending.has(i)) return i
+    }
+    return null
+  }
+
+  private finishDrawRound(): void {
+    for (const p of this.players) p.streetCommit = 0
+    this.highBet = 0
+    this.raisesThisStreet = 0
+    this.lastAggressorSeat = null
+    this.checkRound = true
+    this.checkPending.clear()
+    const opener = seatLeftOf(this.dealerIndex, this.players.length)
+    for (let k = 0; k < this.players.length; k++) {
+      const i = (opener + k) % this.players.length
+      const p = this.players[i]
+      if (!p.folded && !p.allIn) this.checkPending.add(i)
+    }
+    this.street = (3 + this.drawRound) as 3 | 4 | 5 | 6 | 7
+    this.phase = 'betting'
+    this.actionIndex = this.nextActorFrom(opener)
+    this.message = `Betting after draw ${this.drawRound}.`
+    if (this.actionIndex === null) this.advanceAfterBettingRound()
   }
 
   private dealNextStreet(): void {
@@ -621,6 +723,10 @@ export class StudEngine {
         } else if (this.gameKind === 'razz') {
           const s = bestRazzLowScore([...p.hole, ...p.up])
           if (!bestLow || (s && compareRazzLowScores(s, bestLow) > 0)) bestLow = s
+        } else if (this.gameKind === 'badugi') {
+          // handled below
+        } else if (this.gameKind === 'deuce7') {
+          // handled below
         } else {
           const s = bestHandScore([...p.hole, ...p.up])
           if (!best || (s && compareScores(s, best) > 0)) best = s
@@ -636,8 +742,24 @@ export class StudEngine {
             const s = bestHandScore([...p.hole, ...p.up])
             return s && best && compareScores(s, best) === 0
           }
-          const s = bestRazzLowScore([...p.hole, ...p.up])
-          return s && bestLow && compareRazzLowScores(s, bestLow) === 0
+          if (this.gameKind === 'razz') {
+            const s = bestRazzLowScore([...p.hole, ...p.up])
+            return s && bestLow && compareRazzLowScores(s, bestLow) === 0
+          }
+          if (this.gameKind === 'badugi') {
+            const s = bestBadugiScore(p.hole)
+            const b = eligible
+              .map((x) => bestBadugiScore(x.hole))
+              .filter((x): x is NonNullable<typeof x> => Boolean(x))
+              .sort((a, b) => (compareBadugiScores(a, b) > 0 ? -1 : 1))[0]
+            return !!(s && b && compareBadugiScores(s, b) === 0)
+          }
+          const s = bestDeuceToSevenLowScore(p.hole)
+          const b = eligible
+            .map((x) => bestDeuceToSevenLowScore(x.hole))
+            .filter((x): x is NonNullable<typeof x> => Boolean(x))
+            .sort((a, b) => (compareDeuceScores(a, b) > 0 ? -1 : 1))[0]
+          return !!(s && b && compareDeuceScores(s, b) === 0)
         })
         this.distributeChipsByDealerOrder(layer.amount, winners)
         const names = winners.map((w) => w.name).join(', ')
@@ -646,9 +768,25 @@ export class StudEngine {
             ? best
               ? handLabel(best)
               : null
-            : bestLow
-              ? razzHandLabel(bestLow)
-              : null
+            : this.gameKind === 'razz'
+              ? bestLow
+                ? razzHandLabel(bestLow)
+                : null
+              : this.gameKind === 'badugi'
+                ? (() => {
+                    const b = eligible
+                      .map((x) => bestBadugiScore(x.hole))
+                      .filter((x): x is NonNullable<typeof x> => Boolean(x))
+                      .sort((a, b) => (compareBadugiScores(a, b) > 0 ? -1 : 1))[0]
+                    return b ? badugiHandLabel(b) : null
+                  })()
+                : (() => {
+                    const d = eligible
+                      .map((x) => bestDeuceToSevenLowScore(x.hole))
+                      .filter((x): x is NonNullable<typeof x> => Boolean(x))
+                      .sort((a, b) => (compareDeuceScores(a, b) > 0 ? -1 : 1))[0]
+                    return d ? deuceHandLabel(d) : null
+                  })()
         lines.push(
           `${layer.amount} → ${names}${scoreLabel ? ` (${scoreLabel})` : ''}`,
         )
@@ -781,6 +919,11 @@ export class StudEngine {
 
   /** Legal actions for a seat (same rules as the human UI). */
   private legalActionTypesForSeat(i: number): HumanAction['type'][] {
+    if (this.phase === 'draw') {
+      const p = this.players[i]
+      if (p.folded || p.allIn || !this.drawPending.has(i)) return []
+      return ['draw']
+    }
     const p = this.players[i]
     const toCall = Math.max(0, this.highBet - p.streetCommit)
     const canRaise = this.canFullRaise(i) || this.canShortAllInRaise(i)
@@ -821,9 +964,13 @@ export class StudEngine {
    * between steps so the player can follow the action.
    */
   stepAiOnce(): boolean {
-    if (this.phase !== 'betting' || this.actionIndex === null) return false
+    if ((this.phase !== 'betting' && this.phase !== 'draw') || this.actionIndex === null) return false
     const p = this.players[this.actionIndex]
     if (p.isHuman) return false
+    if (this.phase === 'draw') {
+      this.applyAction(this.actionIndex, { type: 'draw', count: this.pickAiDrawCount(this.actionIndex) })
+      return true
+    }
     const ctx = this.buildAiContext(this.actionIndex)
     const choice = pickAiAction(ctx)
     const mappedRaw: HumanAction =
@@ -846,12 +993,57 @@ export class StudEngine {
   fastForwardHand(): void {
     const maxSteps = 4000
     let n = 0
-    while (this.phase === 'betting' && this.actionIndex !== null && n < maxSteps) {
+    while ((this.phase === 'betting' || this.phase === 'draw') && this.actionIndex !== null && n < maxSteps) {
       n += 1
       const p = this.players[this.actionIndex]
       if (p.isHuman) break
       this.stepAiOnce()
     }
+  }
+
+  private drawRandomCards(i: number, count: number): void {
+    const p = this.players[i]
+    const n = Math.max(0, Math.min(count, p.hole.length))
+    for (let k = 0; k < n; k++) {
+      if (p.hole.length === 0 || this.deck.length === 0) break
+      const idx = Math.floor(this.rng() * p.hole.length)
+      p.hole.splice(idx, 1)
+      p.hole.push(this.deck.pop()!)
+    }
+  }
+
+  private drawSpecificCards(i: number, discardIndices: number[]): void {
+    const p = this.players[i]
+    if (p.hole.length === 0) return
+    const uniqSortedDesc = [...new Set(discardIndices)]
+      .filter((x) => Number.isInteger(x) && x >= 0 && x < p.hole.length)
+      .sort((a, b) => b - a)
+    for (const idx of uniqSortedDesc) {
+      if (this.deck.length === 0) break
+      p.hole.splice(idx, 1)
+      p.hole.push(this.deck.pop()!)
+    }
+  }
+
+  private pickAiDrawCount(i: number): number {
+    const p = this.players[i]
+    if (this.gameKind === 'badugi') {
+      const s = bestBadugiScore(p.hole)
+      if (!s) return 2
+      const made = s[0]
+      if (made >= 4) return 0
+      if (made === 3) return 1
+      return 2
+    }
+    if (this.gameKind === 'deuce7') {
+      const s = bestDeuceToSevenLowScore(p.hole)
+      if (!s) return 2
+      const rough = s[0] + s[1]
+      if (rough === 0 && s[2] <= 9) return 0
+      if (rough <= 1) return 1
+      return 2
+    }
+    return 0
   }
 
   private buildAiContext(i: number): AiContext {
@@ -893,7 +1085,9 @@ export class StudEngine {
         ? estimateStudShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
         : this.gameKind === 'razz'
           ? estimateRazzShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
-          : estimateStudHiLoShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
+          : this.gameKind === 'studhilo'
+            ? estimateStudHiLoShowdownEquity(playersForEquity, i, pool, mcIters, this.rng)
+            : 0.5
 
     const aliveInBettingOrbit = this.players.filter(
       (pl) => !pl.folded && !pl.allIn,
@@ -944,6 +1138,26 @@ export class StudEngine {
   private applyAction(i: number, a: HumanAction): void {
     this.normalizeAllInFromStack()
     const p = this.players[i]
+    if (this.phase === 'draw') {
+      if (a.type !== 'draw') return
+      const maxDraw = this.gameKind === 'badugi' ? 4 : 5
+      const explicit =
+        this.players[i].isHuman &&
+        Array.isArray(a.discardIndices) &&
+        a.discardIndices.length > 0
+          ? [...new Set(a.discardIndices)]
+          : null
+      if (explicit) {
+        this.drawSpecificCards(i, explicit.slice(0, maxDraw))
+      } else {
+        const count = Math.max(0, Math.min(maxDraw, Math.floor(a.count)))
+        this.drawRandomCards(i, count)
+      }
+      this.drawPending.delete(i)
+      this.actionIndex = this.nextDrawActorFrom(seatLeftOf(i, this.players.length))
+      if (this.actionIndex === null) this.finishDrawRound()
+      return
+    }
     const toCall = Math.max(0, this.highBet - p.streetCommit)
 
     if (a.type === 'fold') {

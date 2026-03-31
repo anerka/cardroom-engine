@@ -17,6 +17,8 @@ import { isRedSuit, rankDisplay, suitSymbol } from './game/cards'
 import { handLabel, bestHandScore } from './game/pokerRank'
 import { bestRazzLowScore, razzHandLabel } from './game/razzRank'
 import { bestEightOrBetterLowScore, hiLoLowHandLabel } from './game/hiloRank'
+import { badugiHandLabel, bestBadugiScore } from './game/badugiRank'
+import { bestDeuceToSevenLowScore, deuceHandLabel } from './game/deuceRank'
 import { loadSettings, saveSettingsForGame } from './settings/storage'
 import {
   DEFAULT_SETTINGS,
@@ -70,6 +72,17 @@ function heroCardsInTableOrder(
     out.push({ card: hole[2], faceKind: 'hole', sunk: true })
   }
   return out
+}
+
+function cardsForGameDisplay(
+  gameKind: GameKind,
+  hole: Card[],
+  up: Card[],
+): { card: Card; faceKind: 'hole' | 'up'; sunk: boolean }[] {
+  if (gameKind === 'badugi' || gameKind === 'deuce7') {
+    return hole.map((card) => ({ card, faceKind: 'hole', sunk: false }))
+  }
+  return heroCardsInTableOrder(hole, up)
 }
 
 /**
@@ -282,6 +295,8 @@ export default function App() {
     stud: loadSettings('stud'),
     razz: loadSettings('razz'),
     studhilo: loadSettings('studhilo'),
+    badugi: loadSettings('badugi'),
+    deuce7: loadSettings('deuce7'),
   }))
   const [game, setGame] = useState<ActiveGame | null>(null)
   const activeSettings = settingsByGame[selectedGame]
@@ -340,7 +355,7 @@ export default function App() {
         </header>
         <div className="menu-actions-wrap">
           <div className="menu-main menu-main--actions">
-            {(['stud', 'razz', 'studhilo'] as const).map((gameKind) => (
+            {(['stud', 'razz', 'studhilo', 'badugi', 'deuce7'] as const).map((gameKind) => (
               <div key={gameKind} className="menu-game-row">
                 <button
                   type="button"
@@ -606,8 +621,10 @@ function PlayScreen({
 }) {
   const { engine, snap } = game
   const gameName = GAME_LABELS[game.gameKind]
+  const isDrawGame = game.gameKind === 'badugi' || game.gameKind === 'deuce7'
   const { narrow: narrowTable, aiPauseMs } = usePlayTableLayout()
   const [aiDrive, setAiDrive] = useState(0)
+  const [selectedDiscards, setSelectedDiscards] = useState<number[]>([])
 
   useEffect(() => {
     const onFirstTouch = () => unlockBettingAudio()
@@ -617,7 +634,7 @@ function PlayScreen({
 
   useEffect(() => {
     if (
-      snap.phase !== 'betting' ||
+      (snap.phase !== 'betting' && snap.phase !== 'draw') ||
       snap.humanMustAct ||
       snap.actionIndex === null
     ) {
@@ -666,6 +683,17 @@ function PlayScreen({
   const legal = snap.humanMustAct ? engine.legalHumanActions() : []
   const onlyAutoCheck =
     snap.humanMustAct && legal.length === 1 && legal[0] === 'check'
+  const drawMax = game.gameKind === 'badugi' ? 4 : game.gameKind === 'deuce7' ? 5 : 0
+  const canHumanDrawSelect =
+    isDrawGame && snap.phase === 'draw' && snap.humanMustAct && legal.includes('draw')
+
+  useEffect(() => {
+    if (!canHumanDrawSelect) {
+      setSelectedDiscards([])
+      return
+    }
+    setSelectedDiscards((prev) => prev.filter((idx) => idx >= 0 && idx < drawMax))
+  }, [canHumanDrawSelect, drawMax, snap.handNumber, snap.actionIndex])
 
   const act = (a: HumanAction) => {
     const before = engine.snapshot().bettingSoundNonce
@@ -736,7 +764,7 @@ function PlayScreen({
         }
       >
         <div className="cards-row cards-row--hero-line">
-          {heroCardsInTableOrder(p.hole, p.up).map(({ card, faceKind, sunk }, i) =>
+          {cardsForGameDisplay(game.gameKind, p.hole, p.up).map(({ card, faceKind, sunk }, i) =>
             showHoleFaces || faceKind === 'up' ? (
               <PlayingCardFace key={i} c={card} kind={faceKind} sunk={sunk} />
             ) : (
@@ -760,9 +788,32 @@ function PlayScreen({
           aria-label="Your cards: lower row are hole cards hidden from opponents"
         >
           <div className="cards-row cards-row--hero-line">
-            {heroCardsInTableOrder(p.hole, p.up).map(({ card, faceKind, sunk }, i) => (
-              <PlayingCardFace key={i} c={card} kind={faceKind} sunk={sunk} />
-            ))}
+            {cardsForGameDisplay(game.gameKind, p.hole, p.up).map(({ card, faceKind, sunk }, i) => {
+              if (!canHumanDrawSelect || faceKind !== 'hole') {
+                return <PlayingCardFace key={i} c={card} kind={faceKind} sunk={sunk} />
+              }
+              const selected = selectedDiscards.includes(i)
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className={['card-discard-pick', selected ? 'card-discard-pick--selected' : '']
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => {
+                    setSelectedDiscards((prev) => {
+                      if (prev.includes(i)) return prev.filter((x) => x !== i)
+                      if (prev.length >= drawMax) return prev
+                      return [...prev, i]
+                    })
+                  }}
+                  aria-pressed={selected}
+                  aria-label={selected ? 'Keep card' : 'Discard card'}
+                >
+                  <PlayingCardFace c={card} kind={faceKind} sunk={sunk} />
+                </button>
+              )
+            })}
           </div>
         </div>
       ) : null
@@ -770,6 +821,8 @@ function PlayScreen({
     const razzBest = showAllHoles && !p.folded ? bestRazzLowScore([...p.hole, ...p.up]) : null
     const hiLoLowBest =
       showAllHoles && !p.folded ? bestEightOrBetterLowScore([...p.hole, ...p.up]) : null
+    const badugiBest = showAllHoles && !p.folded ? bestBadugiScore(p.hole) : null
+    const deuceBest = showAllHoles && !p.folded ? bestDeuceToSevenLowScore(p.hole) : null
     let bestText: string | null = null
     if (showAllHoles && !p.folded) {
       if (game.gameKind === 'stud' && highBest) {
@@ -779,6 +832,10 @@ function PlayScreen({
       } else if (game.gameKind === 'studhilo' && highBest) {
         const lowText = hiLoLowBest ? ` / ${hiLoLowHandLabel(hiLoLowBest)}` : ''
         bestText = `${handLabel(highBest)}${lowText}`
+      } else if (game.gameKind === 'badugi' && badugiBest) {
+        bestText = badugiHandLabel(badugiBest)
+      } else if (game.gameKind === 'deuce7' && deuceBest) {
+        bestText = deuceHandLabel(deuceBest)
       }
     }
     return (
@@ -899,6 +956,45 @@ function PlayScreen({
           >
             {snap.humanMustAct && !onlyAutoCheck ? (
               <div className="actions-bar">
+                {legal.includes('draw') ? (
+                  <>
+                    {canHumanDrawSelect ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn accent"
+                          onClick={() =>
+                            act({
+                              type: 'draw',
+                              count: selectedDiscards.length,
+                              discardIndices: selectedDiscards,
+                            })
+                          }
+                        >
+                          Draw {selectedDiscards.length}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost"
+                          onClick={() => setSelectedDiscards([])}
+                        >
+                          Keep all
+                        </button>
+                      </>
+                    ) : (
+                      Array.from({ length: drawMax + 1 }, (_, n) => (
+                        <button
+                          key={`draw-${n}`}
+                          type="button"
+                          className={n === 0 ? 'btn ghost' : 'btn'}
+                          onClick={() => act({ type: 'draw', count: n })}
+                        >
+                          Draw {n}
+                        </button>
+                      ))
+                    )}
+                  </>
+                ) : null}
                 {legal.includes('fold') ? (
                   <button type="button" className="btn danger" onClick={() => act({ type: 'fold' })}>
                     Fold
@@ -920,7 +1016,7 @@ function PlayScreen({
                   </button>
                 ) : null}
               </div>
-            ) : snap.phase === 'betting' && !snap.humanMustAct ? (
+            ) : (snap.phase === 'betting' || snap.phase === 'draw') && !snap.humanMustAct ? (
               <div className="actions-waiting-wrap">
                 <p className="actions-waiting muted" aria-live="polite">
                   Other players are acting…

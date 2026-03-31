@@ -13,6 +13,8 @@ const KEY_BY_GAME: Record<GameKind, string> = {
   stud: 'cardroom-settings-stud-v1',
   razz: 'cardroom-settings-razz-v1',
   studhilo: 'cardroom-settings-studhilo-v1',
+  badugi: 'cardroom-settings-badugi-v1',
+  deuce7: 'cardroom-settings-deuce7-v1',
 }
 
 function defaultStackForStakes(stakes: StakesTier): number {
