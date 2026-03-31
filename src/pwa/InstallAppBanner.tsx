@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-const DISMISS_KEY = 'seven-stud-install-banner-dismissed'
+const DISMISS_KEY = 'cardroom-engine-install-banner-dismissed'
 
 function isStandaloneDisplay(): boolean {
   if (window.matchMedia('(display-mode: standalone)').matches) return true
