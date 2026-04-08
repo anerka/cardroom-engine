@@ -454,6 +454,10 @@ export class StudEngine {
     return this.players.some((_, i) => this.needsToAct(i))
   }
 
+  private activeNotAllInCount(): number {
+    return this.players.filter((p) => !p.folded && !p.allIn).length
+  }
+
   private nextRaiseTarget(): number {
     if (!isDrawGame(this.gameKind) && this.street === 3 && this.highBet < this.stakes.smallBet) {
       return this.stakes.smallBet
@@ -582,6 +586,14 @@ export class StudEngine {
   }
 
   private finishDrawRound(): void {
+    if (this.activeNotAllInCount() <= 1) {
+      if (this.drawRound >= 3) {
+        this.runShowdown()
+      } else {
+        this.beginDrawRound()
+      }
+      return
+    }
     for (const p of this.players) p.streetCommit = 0
     this.highBet = 0
     this.raisesThisStreet = 0

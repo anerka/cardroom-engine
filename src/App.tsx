@@ -10,7 +10,6 @@ import {
   type HumanAction,
   type SessionStats,
   type StudSnapshot,
-  type TablePlayer,
 } from './game/studEngine'
 import type { Card } from './game/cards'
 import { isRedSuit, rankDisplay, suitSymbol } from './game/cards'
@@ -19,7 +18,12 @@ import { bestRazzLowScore, razzHandLabel } from './game/razzRank'
 import { bestEightOrBetterLowScore, hiLoLowHandLabel } from './game/hiloRank'
 import { badugiHandLabel, bestBadugiScore } from './game/badugiRank'
 import { bestDeuceToSevenLowScore, deuceHandLabel } from './game/deuceRank'
-import { loadSettings, saveSettingsForGame } from './settings/storage'
+import {
+  loadGlobalSettings,
+  loadSettings,
+  saveGlobalSettings,
+  saveSettingsForGame,
+} from './settings/storage'
 import {
   DEFAULT_SETTINGS,
   GAME_LABELS,
@@ -27,11 +31,16 @@ import {
   MIN_STARTING_STACK,
   STAKES_BY_TIER,
   TEMPO_HANDS_BY_PRESET,
+  type GlobalSettings,
   type GameKind,
   type GameSettings,
 } from './settings/types'
 import './App.css'
-import { playBettingSoundIfNew, unlockBettingAudio } from './audio/bettingSounds'
+import {
+  playBettingSoundIfNew,
+  setBettingSoundEnabled,
+  unlockBettingAudio,
+} from './audio/bettingSounds'
 import { InstallAppBanner } from './pwa/InstallAppBanner'
 
 function PlayingCardFace({
@@ -150,50 +159,6 @@ function usePlayTableLayout(): { narrow: boolean; aiPauseMs: number } {
   return state
 }
 
-type BettingUi =
-  | 'bring-in'
-  | 'bet'
-  | 'raise'
-  | 'matched'
-  | 'facing'
-  | 'allin-facing'
-
-function bettingState(
-  snap: StudSnapshot,
-  idx: number,
-  p: TablePlayer,
-): BettingUi | null {
-  if (p.folded || snap.phase !== 'betting') return null
-  const hb = snap.streetHighBet
-  const c = p.streetCommit
-  const bri = snap.bringInIndex
-
-  if (hb === 0) return null
-
-  if (c < hb) {
-    return p.allIn ? 'allin-facing' : 'facing'
-  }
-
-  if (
-    snap.street === 3 &&
-    bri === idx &&
-    snap.raisesThisStreet === 0 &&
-    snap.lastAggressorSeat === null &&
-    c > 0 &&
-    c === hb
-  ) {
-    return 'bring-in'
-  }
-
-  if (snap.lastAggressorSeat === idx) {
-    return snap.raisesThisStreet <= 1 ? 'bet' : 'raise'
-  }
-
-  if (c >= hb && hb > 0) return 'matched'
-
-  return null
-}
-
 /** Human raise button: first aggression on the street is Bet (or Complete), later Raise. */
 function raiseActionLabel(snap: StudSnapshot): string {
   if (snap.raisesThisStreet > 0) return 'Raise'
@@ -298,8 +263,13 @@ export default function App() {
     badugi: loadSettings('badugi'),
     deuce7: loadSettings('deuce7'),
   }))
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => loadGlobalSettings())
   const [game, setGame] = useState<ActiveGame | null>(null)
   const activeSettings = settingsByGame[selectedGame]
+
+  useEffect(() => {
+    setBettingSoundEnabled(globalSettings.soundEnabled)
+  }, [globalSettings.soundEnabled])
 
   const refresh = useCallback(() => {
     setGame((g) => (g ? { gameKind: g.gameKind, engine: g.engine, snap: g.engine.snapshot() } : null))
@@ -307,12 +277,18 @@ export default function App() {
 
   const startGame = useCallback((gameKind: GameKind) => {
     unlockBettingAudio()
-    const engine = new StudEngine(settingsByGame[gameKind], gameKind)
+    const resolvedSettings = {
+      ...settingsByGame[gameKind],
+      difficulty: globalSettings.useGlobalDifficulty
+        ? globalSettings.globalDifficulty
+        : settingsByGame[gameKind].difficulty,
+    }
+    const engine = new StudEngine(resolvedSettings, gameKind)
     engine.startSession()
     engine.beginHand()
     setGame({ gameKind, engine, snap: engine.snapshot() })
     setScreen('play')
-  }, [settingsByGame])
+  }, [globalSettings.globalDifficulty, globalSettings.useGlobalDifficulty, settingsByGame])
 
   const applySettings = useCallback((gameKind: GameKind, next: GameSettings) => {
     setSettingsByGame((prev) => ({ ...prev, [gameKind]: next }))
@@ -325,7 +301,12 @@ export default function App() {
       <SettingsScreen
         gameKind={selectedGame}
         initial={activeSettings}
+        globalSettings={globalSettings}
         onSave={(next) => applySettings(selectedGame, next)}
+        onSaveGlobal={(next) => {
+          setGlobalSettings(next)
+          saveGlobalSettings(next)
+        }}
         onCancel={() => setScreen('menu')}
       />
     )
@@ -387,7 +368,12 @@ export default function App() {
           <h2>Current setup ({GAME_LABELS[selectedGame]})</h2>
           <ul>
             <li>Opponents: {activeSettings.opponentCount}</li>
-            <li>Difficulty: {activeSettings.difficulty}</li>
+            <li>
+              Difficulty:{' '}
+              {globalSettings.useGlobalDifficulty
+                ? `${globalSettings.globalDifficulty} (global)`
+                : activeSettings.difficulty}
+            </li>
             <li>
               Tempo:{' '}
               {activeSettings.useAdvancedTempo
@@ -422,20 +408,34 @@ function startingStackFieldError(raw: string): string | null {
 function SettingsScreen({
   gameKind,
   initial,
+  globalSettings,
   onSave,
+  onSaveGlobal,
   onCancel,
 }: {
   gameKind: GameKind
   initial: GameSettings
+  globalSettings: GlobalSettings
   onSave: (s: GameSettings) => void
+  onSaveGlobal: (s: GlobalSettings) => void
   onCancel: () => void
 }) {
   const [draft, setDraft] = useState<GameSettings>(initial)
+  const [globalDraft, setGlobalDraft] = useState<GlobalSettings>(globalSettings)
   const [startingStackInput, setStartingStackInput] = useState(() =>
     String(initial.startingStack),
   )
   const startingStackError = startingStackFieldError(startingStackInput)
   const startingStackValid = startingStackError === null
+
+  useEffect(() => {
+    setDraft(initial)
+    setStartingStackInput(String(initial.startingStack))
+  }, [initial, gameKind])
+
+  useEffect(() => {
+    setGlobalDraft(globalSettings)
+  }, [globalSettings])
 
   return (
     <div className="app shell settings-screen">
@@ -449,8 +449,50 @@ function SettingsScreen({
           if (!startingStackValid) return
           const stack = Number(startingStackInput.trim())
           onSave({ ...draft, startingStack: stack })
+          onSaveGlobal(globalDraft)
         }}
       >
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={globalDraft.soundEnabled}
+            onChange={(e) =>
+              setGlobalDraft((g) => ({ ...g, soundEnabled: e.target.checked }))
+            }
+          />
+          Sound enabled (all games)
+        </label>
+
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={globalDraft.useGlobalDifficulty}
+            onChange={(e) =>
+              setGlobalDraft((g) => ({ ...g, useGlobalDifficulty: e.target.checked }))
+            }
+          />
+          Use global difficulty (all games)
+        </label>
+
+        {globalDraft.useGlobalDifficulty ? (
+          <label>
+            Global difficulty
+            <select
+              value={globalDraft.globalDifficulty}
+              onChange={(e) =>
+                setGlobalDraft((g) => ({
+                  ...g,
+                  globalDifficulty: e.target.value as GlobalSettings['globalDifficulty'],
+                }))
+              }
+            >
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </label>
+        ) : null}
+
         <label>
           Opponents (AI)
           <input
@@ -472,6 +514,7 @@ function SettingsScreen({
           Difficulty
           <select
             value={draft.difficulty}
+            disabled={globalDraft.useGlobalDifficulty}
             onChange={(e) =>
               setDraft((d) => ({
                 ...d,
@@ -483,6 +526,9 @@ function SettingsScreen({
             <option value="medium">Medium</option>
             <option value="hard">Hard</option>
           </select>
+          {globalDraft.useGlobalDifficulty ? (
+            <span className="hint">Disabled while global difficulty is enabled.</span>
+          ) : null}
         </label>
 
         <label>
@@ -620,7 +666,6 @@ function PlayScreen({
   onQuit: () => void
 }) {
   const { engine, snap } = game
-  const gameName = GAME_LABELS[game.gameKind]
   const isDrawGame = game.gameKind === 'badugi' || game.gameKind === 'deuce7'
   const { narrow: narrowTable, aiPauseMs } = usePlayTableLayout()
   const [aiDrive, setAiDrive] = useState(0)
@@ -642,7 +687,13 @@ function PlayScreen({
     }
     const id = window.setTimeout(() => {
       const before = engine.snapshot().bettingSoundNonce
-      engine.stepAiOnce()
+      const progressed = engine.stepAiOnce()
+      if (!progressed) {
+        const now = engine.snapshot()
+        if ((now.phase === 'betting' || now.phase === 'draw') && !now.humanMustAct) {
+          engine.fastForwardHand()
+        }
+      }
       const s = engine.snapshot()
       playBettingSoundIfNew(before, s.bettingSoundNonce, s.lastBettingSound)
       onRefresh()
@@ -740,21 +791,9 @@ function PlayScreen({
   const hero = heroIdx >= 0 ? snap.players[heroIdx] : undefined
   const opponents = snap.players.filter((p) => !p.isHuman)
 
-  const betLabels: Record<BettingUi, string> = {
-    'bring-in': 'Bring-in',
-    bet: 'Bet',
-    raise: 'Raise',
-    matched: 'Matched',
-    facing: 'To call',
-    'allin-facing': 'All-in',
-  }
-
   const renderSeat = (p: (typeof snap.players)[0], idx: number, heroSeat: boolean) => {
     const isDealer = idx === snap.dealerIndex
-    const isActor = idx === snap.actionIndex && snap.phase === 'betting'
-    const b = bettingState(snap, idx, p)
-    const hb = snap.streetHighBet
-    const owe = hb > p.streetCommit ? hb - p.streetCommit : 0
+    const isActor = idx === snap.actionIndex && (snap.phase === 'betting' || snap.phase === 'draw')
     const showHoleFaces = p.isHuman || showAllHoles
     const oppOrSummaryLine = (
       <div
@@ -845,10 +884,6 @@ function PlayScreen({
           isActor ? 'acting' : '',
           p.folded ? 'folded' : '',
           heroSeat ? 'player-card--hero' : '',
-          b === 'bet' || b === 'bring-in' ? 'player-card--opened' : '',
-          b === 'raise' ? 'player-card--raised' : '',
-          b === 'matched' ? 'player-card--matched' : '',
-          b === 'facing' || b === 'allin-facing' ? 'player-card--facing-call' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -858,16 +893,10 @@ function PlayScreen({
           {isDealer ? <span className="dealer-pill">D</span> : null}
           {p.folded ? <span className="fold-pill">Fold</span> : null}
         </div>
-        {b ? (
-          <div className={`bet-status bet-status--${b}`}>
-            {betLabels[b]}
-            {b === 'facing' && owe > 0 ? ` ${owe}` : ''}
-          </div>
-        ) : null}
         {snap.phase === 'betting' && p.streetCommit > 0 ? (
-          <div className="street-chips">Round: {p.streetCommit}</div>
+          <div className="bet-chip-marker">{p.streetCommit}</div>
         ) : null}
-        <div className="stack">Stack {p.stack}</div>
+        <div className="stack">{p.stack}</div>
         {heroSeat ? heroLine : oppOrSummaryLine}
         {bestText ? <div className="best-hand">{bestText}</div> : null}
       </div>
@@ -879,7 +908,6 @@ function PlayScreen({
       <header className="play-bar">
         <div>
           <strong>Hand {snap.handNumber}</strong>
-          <span className="muted"> · {gameName} · Level {snap.level}</span>
         </div>
         <div className="play-bar-right">
           <span className="pot">Pot {snap.pot}</span>
@@ -929,11 +957,7 @@ function PlayScreen({
         </div>
 
         <div className="under-felt">
-          <div className="street-pill">
-            {snap.phase === 'betting'
-              ? `${gameName} · Street ${snap.street} · Ante ${snap.stakes.ante} · Small ${snap.stakes.smallBet} · Big ${snap.stakes.bigBet}`
-              : snap.phase}
-          </div>
+          <div className="street-pill">{snap.phase === 'betting' || snap.phase === 'draw' ? '' : snap.phase}</div>
 
           {snap.phase === 'handSummary' ? (
             <>

@@ -5,6 +5,11 @@ const url = (file: string) => `${import.meta.env.BASE_URL}sounds/${file}`
 const cache = new Map<BettingSound, HTMLAudioElement>()
 
 let audioUnlocked = false
+let soundsEnabled = true
+
+export function setBettingSoundEnabled(enabled: boolean): void {
+  soundsEnabled = enabled
+}
 
 function getAudio(kind: BettingSound): HTMLAudioElement {
   let a = cache.get(kind)
@@ -45,6 +50,7 @@ export function unlockBettingAudio(): void {
 
 /** Plays bet/call (chips) or raise-over (raise) SFX. Prefer calling right after a user tap or after unlock. */
 export function playBettingSound(kind: BettingSound): void {
+  if (!soundsEnabled) return
   const a = getAudio(kind)
   try {
     a.currentTime = 0

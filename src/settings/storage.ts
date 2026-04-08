@@ -1,14 +1,17 @@
 import {
+  DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_SETTINGS,
   MAX_STARTING_STACK,
   MIN_STARTING_STACK,
   STAKES_BY_TIER,
+  type GlobalSettings,
   type GameKind,
   type GameSettings,
   type StakesTier,
 } from './types'
 
 const LEGACY_STUD_KEY = 'seven-stud-settings-v1'
+const GLOBAL_KEY = 'cardroom-global-settings-v1'
 const KEY_BY_GAME: Record<GameKind, string> = {
   stud: 'cardroom-settings-stud-v1',
   razz: 'cardroom-settings-razz-v1',
@@ -66,6 +69,34 @@ export function saveSettings(s: GameSettings): void {
 
 export function saveSettingsForGame(game: GameKind, s: GameSettings): void {
   localStorage.setItem(KEY_BY_GAME[game], JSON.stringify(s))
+}
+
+export function loadGlobalSettings(): GlobalSettings {
+  try {
+    const raw = localStorage.getItem(GLOBAL_KEY)
+    if (!raw) return { ...DEFAULT_GLOBAL_SETTINGS }
+    const p = JSON.parse(raw) as Partial<GlobalSettings>
+    return {
+      ...DEFAULT_GLOBAL_SETTINGS,
+      ...p,
+      soundEnabled: Boolean(p.soundEnabled ?? DEFAULT_GLOBAL_SETTINGS.soundEnabled),
+      useGlobalDifficulty: Boolean(
+        p.useGlobalDifficulty ?? DEFAULT_GLOBAL_SETTINGS.useGlobalDifficulty,
+      ),
+      globalDifficulty:
+        p.globalDifficulty === 'easy' ||
+        p.globalDifficulty === 'medium' ||
+        p.globalDifficulty === 'hard'
+          ? p.globalDifficulty
+          : DEFAULT_GLOBAL_SETTINGS.globalDifficulty,
+    }
+  } catch {
+    return { ...DEFAULT_GLOBAL_SETTINGS }
+  }
+}
+
+export function saveGlobalSettings(s: GlobalSettings): void {
+  localStorage.setItem(GLOBAL_KEY, JSON.stringify(s))
 }
 
 function clamp(n: number, lo: number, hi: number): number {

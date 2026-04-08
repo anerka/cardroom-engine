@@ -68,6 +68,12 @@ export interface GameSettings {
   startingStack: number
 }
 
+export interface GlobalSettings {
+  soundEnabled: boolean
+  useGlobalDifficulty: boolean
+  globalDifficulty: Difficulty
+}
+
 export const DEFAULT_SETTINGS: GameSettings = {
   opponentCount: 3,
   difficulty: 'medium',
@@ -76,4 +82,10 @@ export const DEFAULT_SETTINGS: GameSettings = {
   useAdvancedTempo: false,
   stakes: 'low',
   startingStack: STAKES_BY_TIER.low.startingStack,
+}
+
+export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
+  soundEnabled: true,
+  useGlobalDifficulty: false,
+  globalDifficulty: 'medium',
 }
