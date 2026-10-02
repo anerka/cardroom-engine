@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
+import { watchForAppUpdates } from './pwa/watchAppUpdates'
 
 /**
  * Older deploys used `/seven-stud/` as the Vite `base` while the site is hosted at
@@ -29,7 +30,12 @@ void unregisterLegacyServiceWorkers()
       window.location.reload()
       return
     }
-    registerSW({ immediate: true })
+    registerSW({
+      immediate: true,
+      onRegisteredSW(swUrl, registration) {
+        watchForAppUpdates(swUrl, registration)
+      },
+    })
     createRoot(document.getElementById('root')!).render(
       <StrictMode>
         <App />

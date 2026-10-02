@@ -9,6 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: [
         'favicon-16.png',
         'favicon-32.png',
@@ -27,8 +28,9 @@ export default defineConfig({
           'Fixed-limit Seven Card Stud and Razz — play money practice table.',
         lang: 'en',
         dir: 'ltr',
-        start_url: './',
-        scope: './',
+        id: '/cardroom-engine/',
+        start_url: '/cardroom-engine/',
+        scope: '/cardroom-engine/',
         theme_color: '#0c1512',
         background_color: '#0c1512',
         display: 'standalone',
@@ -57,6 +59,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,wav,mp3}'],
         navigateFallback: 'index.html',
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
       },
     }),
   ],
