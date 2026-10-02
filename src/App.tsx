@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from 'react'
@@ -27,6 +28,7 @@ import {
 import {
   DEFAULT_SETTINGS,
   GAME_LABELS,
+  GAME_ORDER,
   MAX_STARTING_STACK,
   MIN_STARTING_STACK,
   STAKES_BY_TIER,
@@ -35,6 +37,14 @@ import {
   type GameKind,
   type GameSettings,
 } from './settings/types'
+import {
+  careerAsSessionStats,
+  concludeChallenge,
+  loadCareerStats,
+  recordHandProgress,
+  recordTableResult,
+  type CareerStats,
+} from './stats/career'
 import './App.css'
 import {
   playBettingSoundIfNew,
@@ -168,7 +178,13 @@ function raiseActionLabel(snap: StudSnapshot): string {
   return 'Bet'
 }
 
-function SessionStatsSummary({ stats }: { stats: SessionStats }) {
+function SessionStatsSummary({
+  stats,
+  title = 'Session stats',
+}: {
+  stats: SessionStats
+  title?: string
+}) {
   if (stats.handsPlayed === 0) return null
   const winPct = Math.round((100 * stats.handsWon) / stats.handsPlayed)
   const foldPct = Math.round((100 * stats.handsFolded) / stats.handsPlayed)
@@ -182,7 +198,7 @@ function SessionStatsSummary({ stats }: { stats: SessionStats }) {
 
   return (
     <div className="session-stats-end">
-      <h2 className="session-stats-end__title">Session stats</h2>
+      <h2 className="session-stats-end__title">{title}</h2>
       <dl className="session-stats-end__dl">
         <div className="session-stats-end__row">
           <dt>Hands won</dt>
@@ -245,12 +261,31 @@ function SessionStatsSummary({ stats }: { stats: SessionStats }) {
   )
 }
 
-type Screen = 'menu' | 'settings' | 'play'
+type Screen = 'menu' | 'settings' | 'play' | 'stats'
+
+interface ChallengeRun {
+  id: string
+  /** Index into GAME_ORDER. Winning this game advances, or completes the challenge. */
+  index: number
+}
 
 interface ActiveGame {
+  sessionId: string
   gameKind: GameKind
   engine: StudEngine
   snap: StudSnapshot
+  challenge: ChallengeRun | null
+}
+
+function syncCareer(game: ActiveGame): void {
+  recordHandProgress(game.sessionId, game.snap.sessionStats)
+  if (game.snap.phase !== 'youWonTable' && game.snap.phase !== 'youBusted') return
+  recordTableResult(game.sessionId, game.gameKind, game.snap.phase === 'youWonTable')
+  if (!game.challenge) return
+  const clearedAll = game.challenge.index === GAME_ORDER.length - 1
+  if (game.snap.phase === 'youBusted' || (game.snap.phase === 'youWonTable' && clearedAll)) {
+    concludeChallenge(game.challenge.id, game.snap.phase === 'youWonTable' && clearedAll)
+  }
 }
 
 export default function App() {
@@ -265,17 +300,29 @@ export default function App() {
   }))
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => loadGlobalSettings())
   const [game, setGame] = useState<ActiveGame | null>(null)
+  const [career, setCareer] = useState<CareerStats>(() => loadCareerStats())
+  const gameRef = useRef<ActiveGame | null>(null)
   const activeSettings = settingsByGame[selectedGame]
+
+  const publishCareer = useCallback(() => {
+    setCareer(loadCareerStats())
+  }, [])
 
   useEffect(() => {
     setBettingSoundEnabled(globalSettings.soundEnabled)
   }, [globalSettings.soundEnabled])
 
   const refresh = useCallback(() => {
-    setGame((g) => (g ? { gameKind: g.gameKind, engine: g.engine, snap: g.engine.snapshot() } : null))
+    const current = gameRef.current
+    if (!current) return
+    const next = { ...current, snap: current.engine.snapshot() }
+    syncCareer(next)
+    gameRef.current = next
+    setGame(next)
+    setCareer(loadCareerStats())
   }, [])
 
-  const startGame = useCallback((gameKind: GameKind) => {
+  const beginSession = useCallback((gameKind: GameKind, challenge: ChallengeRun | null) => {
     unlockBettingAudio()
     const resolvedSettings = {
       ...settingsByGame[gameKind],
@@ -286,9 +333,42 @@ export default function App() {
     const engine = new StudEngine(resolvedSettings, gameKind)
     engine.startSession()
     engine.beginHand()
-    setGame({ gameKind, engine, snap: engine.snapshot() })
+    const next: ActiveGame = {
+      sessionId: crypto.randomUUID(),
+      gameKind,
+      engine,
+      snap: engine.snapshot(),
+      challenge,
+    }
+    syncCareer(next)
+    gameRef.current = next
+    setGame(next)
+    setCareer(loadCareerStats())
     setScreen('play')
   }, [globalSettings.globalDifficulty, globalSettings.useGlobalDifficulty, settingsByGame])
+
+  const quitGame = useCallback(() => {
+    const current = gameRef.current
+    if (current?.challenge) {
+      const started =
+        current.snap.sessionStats.handsPlayed > 0 ||
+        current.snap.phase === 'youBusted' ||
+        current.snap.phase === 'youWonTable'
+      if (started) concludeChallenge(current.challenge.id, false)
+    }
+    gameRef.current = null
+    setGame(null)
+    setCareer(loadCareerStats())
+    setScreen('menu')
+  }, [])
+
+  const advanceChallenge = useCallback(() => {
+    const current = gameRef.current
+    if (!current?.challenge) return
+    const nextIndex = current.challenge.index + 1
+    if (nextIndex >= GAME_ORDER.length) return
+    beginSession(GAME_ORDER[nextIndex], { id: current.challenge.id, index: nextIndex })
+  }, [beginSession])
 
   const applySettings = useCallback((gameKind: GameKind, next: GameSettings) => {
     setSettingsByGame((prev) => ({ ...prev, [gameKind]: next }))
@@ -312,15 +392,18 @@ export default function App() {
     )
   }
 
+  if (screen === 'stats') {
+    return <StatisticsScreen career={career} onBack={() => setScreen('menu')} />
+  }
+
   if (screen === 'play' && game) {
     return (
       <PlayScreen
         game={game}
+        career={career}
         onRefresh={refresh}
-        onQuit={() => {
-          setGame(null)
-          setScreen('menu')
-        }}
+        onQuit={quitGame}
+        onAdvanceChallenge={advanceChallenge}
       />
     )
   }
@@ -336,14 +419,24 @@ export default function App() {
         </header>
         <div className="menu-actions-wrap">
           <div className="menu-main menu-main--actions">
-            {(['stud', 'razz', 'studhilo', 'badugi', 'deuce7'] as const).map((gameKind) => (
+            <button
+              type="button"
+              className="btn accent"
+              onClick={() => beginSession(GAME_ORDER[0], { id: crypto.randomUUID(), index: 0 })}
+            >
+              Challenge
+            </button>
+            <p className="menu-challenge-note">
+              Win all 5 games in a row. Challenges won: {career.challengesWon}.
+            </p>
+            {GAME_ORDER.map((gameKind) => (
               <div key={gameKind} className="menu-game-row">
                 <button
                   type="button"
                   className={['btn', selectedGame === gameKind ? 'primary' : 'ghost'].join(' ')}
                   onClick={() => {
                     setSelectedGame(gameKind)
-                    startGame(gameKind)
+                    beginSession(gameKind, null)
                   }}
                 >
                   Play {GAME_LABELS[gameKind]}
@@ -362,6 +455,9 @@ export default function App() {
                 </button>
               </div>
             ))}
+            <button type="button" className="btn ghost" onClick={() => { publishCareer(); setScreen('stats') }}>
+              Statistics
+            </button>
           </div>
         </div>
         <section className="menu-meta">
@@ -656,14 +752,85 @@ function SettingsScreen({
   )
 }
 
+function SavedTotals({ career }: { career: CareerStats }) {
+  return (
+    <div className="session-stats-end">
+      <h2 className="session-stats-end__title">Saved totals</h2>
+      <dl className="session-stats-end__dl">
+        <div className="session-stats-end__row">
+          <dt>Hands won</dt>
+          <dd>
+            {career.handsWon} / {career.handsPlayed}
+          </dd>
+        </div>
+        <div className="session-stats-end__row">
+          <dt>Tables won</dt>
+          <dd>
+            {career.tablesWon} won / {career.tablesLost} lost
+          </dd>
+        </div>
+        <div className="session-stats-end__row">
+          <dt>Challenges won</dt>
+          <dd>
+            {career.challengesWon} / {career.challengesAttempted}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  )
+}
+
+function StatisticsScreen({
+  career,
+  onBack,
+}: {
+  career: CareerStats
+  onBack: () => void
+}) {
+  return (
+    <div className="app shell end-screen">
+      <h1>Statistics</h1>
+      <p className="end-screen__message">Saved on this device. A new game does not reset these.</p>
+      <SavedTotals career={career} />
+      <div className="session-stats-end">
+        <h2 className="session-stats-end__title">Tables by game</h2>
+        <dl className="session-stats-end__dl">
+          {GAME_ORDER.map((gameKind) => (
+            <div key={gameKind} className="session-stats-end__row">
+              <dt>{GAME_LABELS[gameKind]}</dt>
+              <dd>
+                {career.tablesWonByGame[gameKind]} won / {career.tablesLostByGame[gameKind]} lost
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      {career.handsPlayed === 0 ? (
+        <p className="end-screen__message">No hands saved yet.</p>
+      ) : (
+        <SessionStatsSummary stats={careerAsSessionStats(career)} title="All-time hands" />
+      )}
+      <div className="form-actions form-actions--center">
+        <button type="button" className="btn primary" onClick={onBack}>
+          Back to menu
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function PlayScreen({
   game,
+  career,
   onRefresh,
   onQuit,
+  onAdvanceChallenge,
 }: {
   game: ActiveGame
+  career: CareerStats
   onRefresh: () => void
   onQuit: () => void
+  onAdvanceChallenge: () => void
 }) {
   const { engine, snap } = game
   const isDrawGame = game.gameKind === 'badugi' || game.gameKind === 'deuce7'
@@ -771,14 +938,46 @@ function PlayScreen({
   )
 
   if (snap.phase === 'youBusted' || snap.phase === 'youWonTable') {
+    const challenge = game.challenge
+    const wonTable = snap.phase === 'youWonTable'
+    const challengeStep = challenge ? challenge.index + 1 : 0
+    const challengeContinues = Boolean(challenge && wonTable && challenge.index < GAME_ORDER.length - 1)
+    const challengeComplete = Boolean(challenge && wonTable && challenge.index === GAME_ORDER.length - 1)
+    let title = wonTable ? 'You won the table' : 'Game over'
+    let message = snap.message
+    if (challenge && !wonTable) {
+      title = 'Challenge over'
+      message = `${snap.message} Cleared ${challenge.index} of ${GAME_ORDER.length} games.`
+    } else if (challengeContinues && challenge) {
+      title = `${GAME_LABELS[game.gameKind]} cleared`
+      message = `Next up: ${GAME_LABELS[GAME_ORDER[challenge.index + 1]]}.`
+    } else if (challengeComplete) {
+      title = 'Challenge won'
+      message = 'You won all five games in a row.'
+    }
     return (
       <div className="app shell end-screen">
-        <h1>{snap.phase === 'youBusted' ? 'Game over' : 'You won the table'}</h1>
-        <p className="end-screen__message">{snap.message}</p>
+        <h1>{title}</h1>
+        {challenge ? (
+          <p className="challenge-progress">
+            Challenge {challengeStep} / {GAME_ORDER.length}
+          </p>
+        ) : null}
+        <p className="end-screen__message">{message}</p>
         <SessionStatsSummary stats={snap.sessionStats} />
+        <SavedTotals career={career} />
         <div className="form-actions form-actions--center">
-          <button type="button" className="btn primary" onClick={onQuit}>
-            Back to menu
+          {challengeContinues ? (
+            <button type="button" className="btn primary" onClick={onAdvanceChallenge}>
+              Next game
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={challengeContinues ? 'btn ghost' : 'btn primary'}
+            onClick={onQuit}
+          >
+            {challengeContinues ? 'Quit challenge' : 'Back to menu'}
           </button>
         </div>
       </div>
@@ -908,6 +1107,12 @@ function PlayScreen({
       <header className="play-bar">
         <div>
           <strong>Hand {snap.handNumber}</strong>
+          {game.challenge ? (
+            <span className="challenge-progress">
+              {' '}
+              · Challenge {game.challenge.index + 1}/{GAME_ORDER.length} · {GAME_LABELS[game.gameKind]}
+            </span>
+          ) : null}
         </div>
         <div className="play-bar-right">
           <span className="pot">Pot {snap.pot}</span>

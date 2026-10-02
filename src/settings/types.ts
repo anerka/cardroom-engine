@@ -9,6 +9,9 @@ export const GAME_LABELS: Record<GameKind, string> = {
   deuce7: '2-7 Triple Draw',
 }
 
+/** Menu order. Challenge mode plays these in sequence. */
+export const GAME_ORDER: GameKind[] = ['stud', 'razz', 'studhilo', 'badugi', 'deuce7']
+
 /** Minimum user-configurable starting stack per player. */
 export const MIN_STARTING_STACK = 100
 
