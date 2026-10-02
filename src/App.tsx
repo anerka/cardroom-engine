@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from 'react'
@@ -10,6 +11,7 @@ import {
   type HumanAction,
   type SessionStats,
   type StudSnapshot,
+  type StudStreet,
 } from './game/studEngine'
 import type { Card } from './game/cards'
 import { isRedSuit, rankDisplay, suitSymbol } from './game/cards'
@@ -42,6 +44,14 @@ import {
   unlockBettingAudio,
 } from './audio/bettingSounds'
 import { InstallAppBanner } from './pwa/InstallAppBanner'
+import {
+  GAME_ORDER,
+  loadCareerStats,
+  mergeFinishedGame,
+  saveCareerStats,
+  type CareerStats,
+  type GameRecord,
+} from './stats/career'
 
 function PlayingCardFace({
   c,
@@ -168,89 +178,199 @@ function raiseActionLabel(snap: StudSnapshot): string {
   return 'Bet'
 }
 
-function SessionStatsSummary({ stats }: { stats: SessionStats }) {
-  if (stats.handsPlayed === 0) return null
-  const winPct = Math.round((100 * stats.handsWon) / stats.handsPlayed)
-  const foldPct = Math.round((100 * stats.handsFolded) / stats.handsPlayed)
-  const sdWinPct =
-    stats.showdownsContested > 0
-      ? Math.round((100 * stats.showdownsWon) / stats.showdownsContested)
-      : null
-  const won = stats.handsWon
-  const pctOfWonHands = (winsInBucket: number) =>
-    won > 0 ? `${Math.round((100 * winsInBucket) / won)}%` : '—'
+function isDrawKind(gameKind: GameKind): boolean {
+  return gameKind === 'badugi' || gameKind === 'deuce7'
+}
 
+function foldStreetsFor(gameKind: GameKind): StudStreet[] {
+  return isDrawKind(gameKind) ? [3, 4, 5, 6] : [3, 4, 5, 6, 7]
+}
+
+function foldStreetLabel(gameKind: GameKind, street: StudStreet): string {
+  if (isDrawKind(gameKind)) {
+    if (street === 3) return 'Opening round'
+    if (street === 4) return 'After 1st draw'
+    if (street === 5) return 'After 2nd draw'
+    return 'After 3rd draw'
+  }
+  if (street === 3) return '3rd street'
+  if (street === 4) return '4th street'
+  if (street === 5) return '5th street'
+  if (street === 6) return '6th street'
+  return '7th street'
+}
+
+function finalStreetWinLabel(gameKind: GameKind): string {
+  return isDrawKind(gameKind)
+    ? 'Wins through the last draw'
+    : 'Wins from 4th street to the last'
+}
+
+function formatSignedChips(n: number): string {
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toLocaleString('en-US')} chips`
+}
+
+function StatRows({
+  stats,
+  gameKind,
+  netChips,
+}: {
+  stats: Pick<
+    SessionStats,
+    | 'handsPlayed'
+    | 'handsWon'
+    | 'handsFolded'
+    | 'foldsByStreet'
+    | 'winsFromFourthStreetToLast'
+    | 'totalChipsWonFromPots'
+  >
+  gameKind: GameKind
+  netChips: number | null
+}) {
+  const foldPct =
+    stats.handsPlayed > 0 ? Math.round((100 * stats.handsFolded) / stats.handsPlayed) : 0
+  const winPct =
+    stats.handsPlayed > 0 ? Math.round((100 * stats.handsWon) / stats.handsPlayed) : 0
+  return (
+    <dl className="session-stats-end__dl">
+      <div className="session-stats-end__row">
+        <dt>Hands won</dt>
+        <dd>
+          {stats.handsWon} / {stats.handsPlayed} ({winPct}%)
+        </dd>
+      </div>
+      <div className="session-stats-end__row">
+        <dt>Folded</dt>
+        <dd>
+          {stats.handsFolded} ({foldPct}%)
+        </dd>
+      </div>
+      <div className="session-stats-end__subhead">When you folded</div>
+      {foldStreetsFor(gameKind).map((street) => (
+        <div key={street} className="session-stats-end__row session-stats-end__row--indent">
+          <dt>{foldStreetLabel(gameKind, street)}</dt>
+          <dd>{stats.foldsByStreet[street]}</dd>
+        </div>
+      ))}
+      {netChips !== null ? (
+        <div className="session-stats-end__row">
+          <dt>Result</dt>
+          <dd>{formatSignedChips(netChips)}</dd>
+        </div>
+      ) : null}
+      <div className="session-stats-end__row">
+        <dt>Won from pots</dt>
+        <dd>{stats.totalChipsWonFromPots.toLocaleString('en-US')} chips</dd>
+      </div>
+      <div className="session-stats-end__row">
+        <dt>{finalStreetWinLabel(gameKind)}</dt>
+        <dd>{stats.winsFromFourthStreetToLast}</dd>
+      </div>
+    </dl>
+  )
+}
+
+function SessionStatsSummary({
+  stats,
+  gameKind,
+  netChips,
+  lifetime,
+}: {
+  stats: SessionStats
+  gameKind: GameKind
+  netChips: number
+  lifetime: GameRecord
+}) {
   return (
     <div className="session-stats-end">
-      <h2 className="session-stats-end__title">Session stats</h2>
+      <h2 className="session-stats-end__title">This game</h2>
+      <StatRows stats={stats} gameKind={gameKind} netChips={netChips} />
+      <h2 className="session-stats-end__title session-stats-end__title--follow">
+        All time · {GAME_LABELS[gameKind]}
+      </h2>
       <dl className="session-stats-end__dl">
         <div className="session-stats-end__row">
-          <dt>Hands won</dt>
+          <dt>Times you won this game</dt>
           <dd>
-            {stats.handsWon} / {stats.handsPlayed} ({winPct}%)
+            {lifetime.gamesWon} / {lifetime.gamesPlayed}
           </dd>
         </div>
         <div className="session-stats-end__row">
-          <dt>Hands folded</dt>
-          <dd>
-            {stats.handsFolded} ({foldPct}%)
-          </dd>
-        </div>
-        <div className="session-stats-end__subhead">Wins by cards when you won</div>
-        {([3, 4, 5, 6, 7] as const).map((n) => (
-          <div key={n} className="session-stats-end__row session-stats-end__row--indent">
-            <dt>{n} cards</dt>
-            <dd>{stats.winsByHeroCardCount[n]}</dd>
-          </div>
-        ))}
-        <div className="session-stats-end__subhead">Stayed in past 3rd–6th card</div>
-        <p className="session-stats-end__hint muted">
-          Share of pots you won where you still had at least 4–7 cards.
-        </p>
-        {(
-          [
-            [4, 'Past 3rd card (≥4 when you won)'],
-            [5, 'Past 4th card (≥5)'],
-            [6, 'Past 5th card (≥6)'],
-            [7, 'Past 6th card (all seven)'],
-          ] as const
-        ).map(([k, label]) => (
-          <div key={k} className="session-stats-end__row session-stats-end__row--indent">
-            <dt>{label}</dt>
-            <dd>{pctOfWonHands(stats.winsAfterAtLeastCards[k])}</dd>
-          </div>
-        ))}
-        <div className="session-stats-end__subhead">More</div>
-        <div className="session-stats-end__row">
-          <dt>Biggest single win</dt>
-          <dd>{stats.biggestPotShareWon} chips</dd>
-        </div>
-        <div className="session-stats-end__row">
-          <dt>Largest full pot you won</dt>
-          <dd>{stats.biggestFullPotWhenWon} chips</dd>
-        </div>
-        <div className="session-stats-end__row">
-          <dt>Total won from pots</dt>
-          <dd>{stats.totalChipsWonFromPots} chips</dd>
-        </div>
-        <div className="session-stats-end__row">
-          <dt>Showdowns</dt>
-          <dd>
-            {stats.showdownsWon} won / {stats.showdownsContested}
-            {sdWinPct !== null ? ` (${sdWinPct}%)` : ''}
-          </dd>
+          <dt>Hands won in total</dt>
+          <dd>{lifetime.handsWon}</dd>
         </div>
       </dl>
     </div>
   )
 }
 
-type Screen = 'menu' | 'settings' | 'play'
+function StatsScreen({ career, onBack }: { career: CareerStats; onBack: () => void }) {
+  return (
+    <div className="app shell stats-screen">
+      <header className="topbar topbar--menu">
+        <h1>Statistics</h1>
+        <p className="tagline">Saved separately for each game.</p>
+      </header>
+      <section className="session-stats-end">
+        <h2 className="session-stats-end__title">All Game Challenge</h2>
+        <dl className="session-stats-end__dl">
+          <div className="session-stats-end__row">
+            <dt>Completed</dt>
+            <dd>{career.challengeCompleted}</dd>
+          </div>
+          <div className="session-stats-end__row">
+            <dt>Failed</dt>
+            <dd>{career.challengeFailed}</dd>
+          </div>
+        </dl>
+        <p className="session-stats-end__hint muted">
+          A challenge is one win for each game, played in order. Losing any game is a failed
+          challenge.
+        </p>
+      </section>
+      {GAME_ORDER.map((gameKind) => {
+        const record = career.byGame[gameKind]
+        return (
+          <section key={gameKind} className="session-stats-end">
+            <h2 className="session-stats-end__title">{GAME_LABELS[gameKind]}</h2>
+            <dl className="session-stats-end__dl">
+              <div className="session-stats-end__row">
+                <dt>Times you won this game</dt>
+                <dd>
+                  {record.gamesWon} / {record.gamesPlayed}
+                </dd>
+              </div>
+            </dl>
+            <StatRows
+              stats={record}
+              gameKind={gameKind}
+              netChips={record.netChips}
+            />
+          </section>
+        )
+      })}
+      <div className="form-actions form-actions--center">
+        <button type="button" className="btn primary" onClick={onBack}>
+          Back to menu
+        </button>
+      </div>
+    </div>
+  )
+}
+
+type Screen = 'menu' | 'settings' | 'play' | 'stats'
+
+interface ChallengeRun {
+  index: number
+}
 
 interface ActiveGame {
+  sessionId: number
   gameKind: GameKind
   engine: StudEngine
   snap: StudSnapshot
+  challenge: ChallengeRun | null
 }
 
 export default function App() {
@@ -264,7 +384,10 @@ export default function App() {
     deuce7: loadSettings('deuce7'),
   }))
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => loadGlobalSettings())
+  const [career, setCareer] = useState<CareerStats>(() => loadCareerStats())
   const [game, setGame] = useState<ActiveGame | null>(null)
+  const [lastRecordedSessionId, setLastRecordedSessionId] = useState<number | null>(null)
+  const sessionCounter = useRef(0)
   const activeSettings = settingsByGame[selectedGame]
 
   useEffect(() => {
@@ -272,10 +395,10 @@ export default function App() {
   }, [globalSettings.soundEnabled])
 
   const refresh = useCallback(() => {
-    setGame((g) => (g ? { gameKind: g.gameKind, engine: g.engine, snap: g.engine.snapshot() } : null))
+    setGame((g) => (g ? { ...g, snap: g.engine.snapshot() } : null))
   }, [])
 
-  const startGame = useCallback((gameKind: GameKind) => {
+  const startGame = useCallback((gameKind: GameKind, challenge: ChallengeRun | null = null) => {
     unlockBettingAudio()
     const resolvedSettings = {
       ...settingsByGame[gameKind],
@@ -286,9 +409,50 @@ export default function App() {
     const engine = new StudEngine(resolvedSettings, gameKind)
     engine.startSession()
     engine.beginHand()
-    setGame({ gameKind, engine, snap: engine.snapshot() })
+    sessionCounter.current += 1
+    setGame({
+      sessionId: sessionCounter.current,
+      gameKind,
+      engine,
+      snap: engine.snapshot(),
+      challenge,
+    })
     setScreen('play')
   }, [globalSettings.globalDifficulty, globalSettings.useGlobalDifficulty, settingsByGame])
+
+  const leaveToMenu = useCallback(() => {
+    setGame(null)
+    setScreen('menu')
+  }, [])
+
+  if (
+    game &&
+    (game.snap.phase === 'youWonTable' || game.snap.phase === 'youBusted') &&
+    game.sessionId !== lastRecordedSessionId
+  ) {
+    const hero = game.snap.players.find((p) => p.isHuman)
+    const net = (hero?.stack ?? 0) - game.snap.sessionStartStack
+    const outcome = game.snap.phase === 'youWonTable' ? 'won' : 'lost'
+    const challengeResult =
+      game.challenge == null
+        ? null
+        : outcome === 'lost'
+          ? 'failed'
+          : game.challenge.index === GAME_ORDER.length - 1
+            ? 'completed'
+            : null
+    const next = mergeFinishedGame(
+      career,
+      game.gameKind,
+      game.snap.sessionStats,
+      outcome,
+      net,
+      challengeResult,
+    )
+    saveCareerStats(next)
+    setLastRecordedSessionId(game.sessionId)
+    setCareer(next)
+  }
 
   const applySettings = useCallback((gameKind: GameKind, next: GameSettings) => {
     setSettingsByGame((prev) => ({ ...prev, [gameKind]: next }))
@@ -312,15 +476,27 @@ export default function App() {
     )
   }
 
+  if (screen === 'stats') {
+    return <StatsScreen career={career} onBack={() => setScreen('menu')} />
+  }
+
   if (screen === 'play' && game) {
+    const nextIndex = game.challenge ? game.challenge.index + 1 : 0
+    const offerNextChallengeGame =
+      game.challenge !== null &&
+      game.snap.phase === 'youWonTable' &&
+      nextIndex < GAME_ORDER.length
     return (
       <PlayScreen
         game={game}
+        lifetime={career.byGame[game.gameKind]}
+        challengeCompleted={career.challengeCompleted}
+        challengeFailed={career.challengeFailed}
         onRefresh={refresh}
-        onQuit={() => {
-          setGame(null)
-          setScreen('menu')
-        }}
+        onQuit={leaveToMenu}
+        onNextChallengeGame={
+          offerNextChallengeGame ? () => startGame(GAME_ORDER[nextIndex], { index: nextIndex }) : null
+        }
       />
     )
   }
@@ -343,7 +519,7 @@ export default function App() {
                   className={['btn', selectedGame === gameKind ? 'primary' : 'ghost'].join(' ')}
                   onClick={() => {
                     setSelectedGame(gameKind)
-                    startGame(gameKind)
+                    startGame(gameKind, null)
                   }}
                 >
                   Play {GAME_LABELS[gameKind]}
@@ -362,6 +538,16 @@ export default function App() {
                 </button>
               </div>
             ))}
+            <button type="button" className="btn accent" onClick={() => startGame(GAME_ORDER[0], { index: 0 })}>
+              All Game Challenge
+            </button>
+            <p className="menu-challenge-note muted">
+              Win every game, one at a time. Completed {career.challengeCompleted} · Failed{' '}
+              {career.challengeFailed}
+            </p>
+            <button type="button" className="btn ghost" onClick={() => setScreen('stats')}>
+              Statistics
+            </button>
           </div>
         </div>
         <section className="menu-meta">
@@ -658,12 +844,20 @@ function SettingsScreen({
 
 function PlayScreen({
   game,
+  lifetime,
+  challengeCompleted,
+  challengeFailed,
   onRefresh,
   onQuit,
+  onNextChallengeGame,
 }: {
   game: ActiveGame
+  lifetime: GameRecord
+  challengeCompleted: number
+  challengeFailed: number
   onRefresh: () => void
   onQuit: () => void
+  onNextChallengeGame: (() => void) | null
 }) {
   const { engine, snap } = game
   const isDrawGame = game.gameKind === 'badugi' || game.gameKind === 'deuce7'
@@ -771,13 +965,45 @@ function PlayScreen({
   )
 
   if (snap.phase === 'youBusted' || snap.phase === 'youWonTable') {
+    const hero = snap.players.find((p) => p.isHuman)
+    const netChips = (hero?.stack ?? 0) - snap.sessionStartStack
+    const wonTable = snap.phase === 'youWonTable'
+    const challenge = game.challenge
+    const nextKind =
+      challenge && wonTable && challenge.index + 1 < GAME_ORDER.length
+        ? GAME_ORDER[challenge.index + 1]
+        : null
+    let challengeLine: string | null = null
+    if (challenge && wonTable && nextKind) {
+      challengeLine = `Challenge ${challenge.index + 1}/${GAME_ORDER.length} won. Next: ${GAME_LABELS[nextKind]}.`
+    } else if (challenge && wonTable) {
+      challengeLine = `Challenge completed. You won all ${GAME_ORDER.length} games. Completed ${challengeCompleted} · Failed ${challengeFailed}.`
+    } else if (challenge) {
+      challengeLine = `Challenge failed on ${GAME_LABELS[game.gameKind]}. Completed ${challengeCompleted} · Failed ${challengeFailed}.`
+    }
     return (
       <div className="app shell end-screen">
-        <h1>{snap.phase === 'youBusted' ? 'Game over' : 'You won the table'}</h1>
+        <h1>{wonTable ? 'You won the table' : 'Game over'}</h1>
+        <p className="end-screen__game">{GAME_LABELS[game.gameKind]}</p>
         <p className="end-screen__message">{snap.message}</p>
-        <SessionStatsSummary stats={snap.sessionStats} />
+        {challengeLine ? <p className="end-screen__message">{challengeLine}</p> : null}
+        <SessionStatsSummary
+          stats={snap.sessionStats}
+          gameKind={game.gameKind}
+          netChips={netChips}
+          lifetime={lifetime}
+        />
         <div className="form-actions form-actions--center">
-          <button type="button" className="btn primary" onClick={onQuit}>
+          {onNextChallengeGame ? (
+            <button type="button" className="btn primary" onClick={onNextChallengeGame}>
+              Next game
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={onNextChallengeGame ? 'btn ghost' : 'btn primary'}
+            onClick={onQuit}
+          >
             Back to menu
           </button>
         </div>
@@ -908,6 +1134,12 @@ function PlayScreen({
       <header className="play-bar">
         <div>
           <strong>Hand {snap.handNumber}</strong>
+          <div className="challenge-pill">
+            {game.challenge
+              ? `Challenge ${game.challenge.index + 1}/${GAME_ORDER.length} · `
+              : ''}
+            {GAME_LABELS[game.gameKind]}
+          </div>
         </div>
         <div className="play-bar-right">
           <span className="pot">Pot {snap.pot}</span>

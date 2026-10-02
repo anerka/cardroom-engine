@@ -24,7 +24,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center;
   align-items: stretch;
   min-height: 0;
   width: 100%;
@@ -69,6 +69,13 @@
 .menu-game-row .btn {
   text-align: center;
   justify-content: center;
+}
+
+.menu-challenge-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .btn-settings-icon {
@@ -889,11 +896,35 @@
 
 .end-screen {
   text-align: center;
-  padding-top: 3rem;
+  padding-top: max(1.25rem, env(safe-area-inset-top, 0px));
   max-width: 26rem;
   margin: 0 auto;
   padding-left: 1rem;
   padding-right: 1rem;
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+
+.end-screen__game {
+  margin: -0.35rem 0 0.75rem;
+  color: #8aa396;
+  font-size: 0.92rem;
+}
+
+.stats-screen {
+  max-width: 26rem;
+}
+
+.stats-screen .session-stats-end {
+  margin-bottom: 0.85rem;
+}
+
+.challenge-pill {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: #8aa396;
+  line-height: 1.3;
 }
 
 .end-screen h1 {
@@ -922,6 +953,10 @@
   font-size: 1rem;
   font-weight: 650;
   text-align: center;
+}
+
+.session-stats-end__title--follow {
+  margin-top: 1.1rem;
 }
 
 .session-stats-end__dl {
