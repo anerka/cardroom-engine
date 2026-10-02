@@ -678,13 +678,13 @@ function PlayScreen({
   }, [])
 
   useEffect(() => {
-    if (
-      (snap.phase !== 'betting' && snap.phase !== 'draw') ||
-      snap.humanMustAct ||
-      snap.actionIndex === null
-    ) {
+    if (snap.phase !== 'betting' && snap.phase !== 'draw') return
+    if (snap.actionIndex === null) {
+      engine.resolveIdleAction()
+      onRefresh()
       return
     }
+    if (snap.humanMustAct) return
     const id = window.setTimeout(() => {
       const before = engine.snapshot().bettingSoundNonce
       const progressed = engine.stepAiOnce()
