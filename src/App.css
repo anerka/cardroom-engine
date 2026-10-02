@@ -21,12 +21,11 @@
 
 /* Vertically center the whole menu (title + actions + setup) as one block */
 .menu-stack {
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: safe center;
   align-items: stretch;
-  min-height: 0;
   width: 100%;
 }
 
