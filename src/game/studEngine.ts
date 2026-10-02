@@ -357,6 +357,10 @@ export class StudEngine {
       p.stack -= pay
       p.contributedPot += pay
       this.pot += pay
+      if (p.stack <= 0) {
+        p.stack = 0
+        p.allIn = true
+      }
     }
 
     if (isDrawGame(this.gameKind)) {
@@ -383,6 +387,7 @@ export class StudEngine {
       this.phase = 'betting'
       this.actionIndex = this.nextActorFrom(opener)
       this.message = 'Opening betting round.'
+      if (this.actionIndex === null) this.resolveIdleAction()
       return
     }
 
@@ -406,6 +411,11 @@ export class StudEngine {
     this.players[bi].streetCommit = bring
     this.pot += bring
 
+    if (this.players[bi].stack <= 0) {
+      this.players[bi].stack = 0
+      this.players[bi].allIn = true
+    }
+
     this.highBet = bring
     this.raisesThisStreet = 0
     this.lastAggressorSeat = null
@@ -413,8 +423,15 @@ export class StudEngine {
     this.checkPending.clear()
     this.street = 3
     this.phase = 'betting'
-    this.actionIndex = this.nextActorFrom(seatLeftOf(bi, this.players.length))
-    this.message = `${this.players[bi].name} brings in ${bring}.`
+    this.message =
+      bring > 0
+        ? `${this.players[bi].name} brings in ${bring}.`
+        : `${this.players[bi].name} is all-in.`
+    const start = seatLeftOf(bi, this.players.length)
+    this.actionIndex = this.nextActorFrom(start)
+    // A bring-in of 0 (player was already all-in for the ante) matches nobody,
+    // so the usual "owe the bet" scan finds no actor and the hand used to freeze.
+    if (this.actionIndex === null) this.resolveIdleAction()
   }
 
   private resetForNewHand(): void {
@@ -456,6 +473,54 @@ export class StudEngine {
 
   private activeNotAllInCount(): number {
     return this.players.filter((p) => !p.folded && !p.allIn).length
+  }
+
+  /** Open a check-or-bet round. Used when the street has no forced bet yet. */
+  private startCheckRound(start: number): void {
+    this.checkRound = true
+    this.checkPending.clear()
+    const n = this.players.length
+    for (let k = 0; k < n; k++) {
+      const i = (start + k) % n
+      const p = this.players[i]
+      if (!p.folded && !p.allIn) this.checkPending.add(i)
+    }
+    this.phase = 'betting'
+    this.actionIndex = this.nextActorFrom(start)
+    if (this.actionIndex === null) this.advanceAfterBettingRound()
+  }
+
+  /** If nobody is left to act, open a betting round or deal the hand out. */
+  resolveIdleAction(): void {
+    for (let guard = 0; guard < 16; guard++) {
+      if (this.phase !== 'betting' && this.phase !== 'draw') return
+      if (this.actionIndex !== null) return
+      const signature = `${this.phase}:${this.street}:${this.drawRound}`
+      if (this.phase === 'draw') {
+        this.finishDrawRound()
+      } else {
+        this.normalizeAllInFromStack()
+        const anchor = this.bringInIndex ?? this.dealerIndex
+        const start = seatLeftOf(anchor, this.players.length)
+        if (this.highBet === 0 && !this.checkRound && this.activeNotAllInCount() >= 2) {
+          this.startCheckRound(start)
+        } else {
+          this.advanceAfterBettingRound()
+        }
+      }
+      const next = `${this.phase}:${this.street}:${this.drawRound}`
+      if (next === signature && this.actionIndex === null) {
+        const contenders = this.players.filter((p) => !p.folded)
+        if (contenders.length === 1) this.awardPotToSingle(contenders[0].id)
+        else if (contenders.length > 1) this.runShowdown()
+        else {
+          this.phase = 'handSummary'
+          this.actionIndex = null
+          this.message = 'Hand complete.'
+        }
+        return
+      }
+    }
   }
 
   private nextRaiseTarget(): number {
@@ -632,6 +697,13 @@ export class StudEngine {
     this.lastAggressorSeat = null
     this.checkRound = true
     this.checkPending.clear()
+    // Nobody left who can bet against each other: deal the rest out.
+    if (this.activeNotAllInCount() <= 1) {
+      this.checkRound = false
+      this.actionIndex = null
+      this.advanceAfterBettingRound()
+      return
+    }
     const opener = this.openingSeatFourthPlus()
     const n = this.players.length
     for (let k = 0; k < n; k++) {
@@ -1150,6 +1222,11 @@ export class StudEngine {
   private applyAction(i: number, a: HumanAction): void {
     this.normalizeAllInFromStack()
     const p = this.players[i]
+    if (this.phase !== 'draw' && (p.folded || p.allIn)) {
+      this.checkPending.delete(i)
+      this.afterAction(i)
+      return
+    }
     if (this.phase === 'draw') {
       if (a.type !== 'draw') return
       const maxDraw = this.gameKind === 'badugi' ? 4 : 5
