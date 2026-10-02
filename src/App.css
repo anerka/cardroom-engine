@@ -59,6 +59,20 @@
   justify-content: center;
 }
 
+.menu-challenge-note {
+  margin: -0.2rem 0 0.15rem;
+  color: #9cb0a8;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.challenge-progress {
+  color: #9dccb8;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .menu-game-row {
   display: grid;
   grid-template-columns: 1fr auto;
