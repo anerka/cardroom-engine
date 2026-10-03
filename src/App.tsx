@@ -306,6 +306,10 @@ function SessionStatsSummary({
 }
 
 function StatsScreen({ career, onBack }: { career: CareerStats; onBack: () => void }) {
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
+
   return (
     <div className="app shell stats-screen">
       <header className="topbar topbar--menu">

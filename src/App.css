@@ -912,7 +912,18 @@
 }
 
 .stats-screen {
+  /* Own scrollport. html/body use overflow-x: hidden, which on phones
+     turns the document into a scroll container that does not move, so a
+     tall statistics page was stuck showing only the top. */
   max-width: 26rem;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .stats-screen .session-stats-end {
