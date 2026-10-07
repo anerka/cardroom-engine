@@ -104,17 +104,38 @@ function cardsForGameDisplay(
   return heroCardsInTableOrder(hole, up)
 }
 
+type PlayTableLayout = 'wide' | 'narrow' | 'landscape'
+
 /**
  * Opponent seats on an upper ellipse (no seats at bottom — hero sits there).
  * θ is standard math angle from +x; sin negative puts seats in upper half of felt.
  * `narrow` uses a slightly smaller vertical arc; horizontal spread stays close to
  * desktop so end seats still sit near the left/right edges (same feel as Mac).
+ * `landscape` is a phone on its side: the felt is the whole screen, so opponents
+ * sit along the top and toward the sides, clear of the corner labels and the hero.
  */
 function opponentSeatPositions(
   count: number,
-  narrow: boolean,
+  layout: PlayTableLayout,
 ): { left: number; top: number }[] {
   if (count <= 0) return []
+  if (layout === 'landscape') {
+    const start = (-152 * Math.PI) / 180
+    const end = (-28 * Math.PI) / 180
+    const cx = 50
+    const cy = 41
+    const rx = 34
+    const ry = 6
+    return Array.from({ length: count }, (_, i) => {
+      const t = count === 1 ? 0.5 : i / (count - 1)
+      const theta = start + (end - start) * t
+      const left = cx + rx * Math.cos(theta)
+      /* Stay under the corner labels, still in the top half, away from the hero. */
+      const top = Math.min(44, Math.max(34, cy + ry * Math.sin(theta)))
+      return { left, top }
+    })
+  }
+  const narrow = layout === 'narrow'
   const start = (-168 * Math.PI) / 180
   const end = (-12 * Math.PI) / 180
   const cx = 50
@@ -140,27 +161,32 @@ function opponentSeatPositions(
   })
 }
 
-function usePlayTableLayout(): { narrow: boolean; aiPauseMs: number } {
-  const [state, setState] = useState(() => ({
-    narrow: false,
-    aiPauseMs: 700,
-  }))
+const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 520px)'
+
+function readPlayTableLayout(): { layout: PlayTableLayout; aiPauseMs: number } {
+  const landscape = window.matchMedia(PHONE_LANDSCAPE_QUERY).matches
+  const narrow =
+    !landscape &&
+    (window.matchMedia('(max-width: 560px)').matches ||
+      window.matchMedia('(max-height: 520px)').matches)
+  const layout: PlayTableLayout = landscape ? 'landscape' : narrow ? 'narrow' : 'wide'
+  return { layout, aiPauseMs: layout === 'wide' ? 680 : 520 }
+}
+
+function usePlayTableLayout(): { layout: PlayTableLayout; aiPauseMs: number } {
+  const [state, setState] = useState(readPlayTableLayout)
   useEffect(() => {
+    const mqLandscape = window.matchMedia(PHONE_LANDSCAPE_QUERY)
     const mqNarrowWidth = window.matchMedia('(max-width: 560px)')
-    const mqShortHeight = window.matchMedia('(max-height: 500px)')
-    const apply = () => {
-      /* Landscape phones are short; keep compact table/card sizing there too. */
-      const narrow = mqNarrowWidth.matches || mqShortHeight.matches
-      setState({
-        narrow,
-        aiPauseMs: narrow ? 520 : 680,
-      })
-    }
+    const mqShortHeight = window.matchMedia('(max-height: 520px)')
+    const apply = () => setState(readPlayTableLayout())
+    mqLandscape.addEventListener('change', apply)
     mqNarrowWidth.addEventListener('change', apply)
     mqShortHeight.addEventListener('change', apply)
     window.addEventListener('resize', apply)
     apply()
     return () => {
+      mqLandscape.removeEventListener('change', apply)
       mqNarrowWidth.removeEventListener('change', apply)
       mqShortHeight.removeEventListener('change', apply)
       window.removeEventListener('resize', apply)
@@ -865,7 +891,7 @@ function PlayScreen({
 }) {
   const { engine, snap } = game
   const isDrawGame = game.gameKind === 'badugi' || game.gameKind === 'deuce7'
-  const { narrow: narrowTable, aiPauseMs } = usePlayTableLayout()
+  const { layout: tableLayout, aiPauseMs } = usePlayTableLayout()
   const [aiDrive, setAiDrive] = useState(0)
   const [selectedDiscards, setSelectedDiscards] = useState<number[]>([])
 
@@ -964,8 +990,8 @@ function PlayScreen({
 
   const opponentCount = snap.players.filter((p) => !p.isHuman).length
   const oppPositions = useMemo(
-    () => opponentSeatPositions(opponentCount, narrowTable),
-    [opponentCount, narrowTable],
+    () => opponentSeatPositions(opponentCount, tableLayout),
+    [opponentCount, tableLayout],
   )
 
   if (snap.phase === 'youBusted' || snap.phase === 'youWonTable') {
@@ -1134,7 +1160,11 @@ function PlayScreen({
   }
 
   return (
-    <div className="app play">
+    <div
+      className={['app', 'play', tableLayout === 'landscape' ? 'play--phone-landscape' : '']
+        .filter(Boolean)
+        .join(' ')}
+    >
       <header className="play-bar">
         <div>
           <strong>Hand {snap.handNumber}</strong>
@@ -1156,7 +1186,7 @@ function PlayScreen({
       <p className="status-msg">{snap.message}</p>
 
       <div
-        className={['play-table-column', narrowTable ? 'play-table-column--narrow' : '']
+        className={['play-table-column', tableLayout === 'narrow' ? 'play-table-column--narrow' : '']
           .filter(Boolean)
           .join(' ')}
       >

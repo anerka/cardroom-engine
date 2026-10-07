@@ -1090,46 +1090,203 @@
   }
 }
 
-@media (max-height: 500px) and (orientation: landscape) {
-  .play {
-    padding-top: 0.4rem;
-    padding-bottom: 0.65rem;
-  }
+/* Phone on its side: one full-screen felt. Game name, stakes line, and actions
+   sit on the cloth in the corners so opponent hands can use the top and the
+   hero the bottom without a header/footer squeezing them together. */
+.play--phone-landscape {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0c2218;
+}
 
-  .play-bar {
-    padding-bottom: 0.4rem;
-  }
+.play--phone-landscape .play-table-column {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+  margin: 0;
+}
 
-  .status-msg {
-    margin-bottom: 0.5rem;
-    font-size: 0.84rem;
-  }
+.play--phone-landscape .table-wrap,
+.play--phone-landscape .felt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+}
 
-  .table-wrap,
-  .felt {
-    min-height: min(70vh, 360px);
-  }
+.play--phone-landscape .felt {
+  padding-top: max(2.4rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(4.6rem, calc(env(safe-area-inset-bottom, 0px) + 4.2rem));
+  padding-left: max(0.35rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.35rem, env(safe-area-inset-right, 0px));
+  background:
+    radial-gradient(ellipse 88% 78% at 50% 46%, #2a7a54 0%, #143828 58%, #0c2218 100%);
+}
 
-  .felt {
-    padding-top: 0.45rem;
-    padding-bottom: clamp(5.7rem, 17vw, 7.2rem);
-  }
+.play--phone-landscape .play-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  margin: 0;
+  padding:
+    max(0.28rem, env(safe-area-inset-top, 0px))
+    max(0.5rem, env(safe-area-inset-right, 0px))
+    0
+    max(0.5rem, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  background: none;
+}
 
-  .under-felt {
-    gap: 0.4rem;
-    align-items: flex-start;
-    padding-top: 0.55rem;
-    padding-bottom: 0.6rem;
-  }
+.play--phone-landscape .play-bar button {
+  pointer-events: auto;
+}
 
-  .actions-slot {
-    min-height: 2.5rem;
-    justify-content: flex-start;
-  }
+.play--phone-landscape .play-bar > div:first-child {
+  max-width: 46%;
+  min-width: 0;
+}
 
-  .actions-bar {
-    justify-content: flex-start;
-  }
+.play--phone-landscape .play-bar strong {
+  font-size: 0.82rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.play--phone-landscape .challenge-pill {
+  margin-top: 0;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.play--phone-landscape .pot {
+  font-size: 0.82rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.play--phone-landscape .status-msg {
+  position: absolute;
+  z-index: 6;
+  top: max(2.7rem, calc(env(safe-area-inset-top, 0px) + 2.35rem));
+  left: max(0.5rem, env(safe-area-inset-left, 0px));
+  right: auto;
+  width: min(42%, 15rem);
+  margin: 0;
+  padding: 0;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  color: #d7ebe0;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.play--phone-landscape .under-felt {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  align-items: center;
+  gap: 0.35rem;
+  padding:
+    0.2rem
+    max(0.45rem, env(safe-area-inset-right, 0px))
+    max(0.3rem, env(safe-area-inset-bottom, 0px))
+    max(0.45rem, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  background: none;
+}
+
+.play--phone-landscape .under-felt button,
+.play--phone-landscape .under-felt .summary-panel,
+.play--phone-landscape .under-felt .install-app-banner {
+  pointer-events: auto;
+}
+
+.play--phone-landscape .street-pill:empty {
+  display: none;
+}
+
+.play--phone-landscape .actions-slot,
+.play--phone-landscape .actions-bar {
+  max-width: min(100%, 36rem);
+  min-height: 0;
+}
+
+.play--phone-landscape .actions-bar .btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.84rem;
+}
+
+.play--phone-landscape .summary-panel {
+  max-height: 38dvh;
+  overflow: auto;
+  padding: 0.65rem 0.8rem;
+}
+
+.play--phone-landscape .install-app-banner {
+  padding: 0.45rem 0.7rem;
+}
+
+.play--phone-landscape .seat--hero {
+  bottom: max(3.15rem, calc(env(safe-area-inset-bottom, 0px) + 2.9rem));
+  max-width: calc(100% - max(0.5rem, env(safe-area-inset-left, 0px)) - max(0.5rem, env(safe-area-inset-right, 0px)));
+}
+
+.play--phone-landscape .felt-pot-badge {
+  top: 54%;
+  font-size: 0.75rem;
+}
+
+.play--phone-landscape .seats-ring {
+  inset: 20% 8% 26%;
+}
+
+.play--phone-landscape .seat--opp .player-card {
+  padding: 0.16rem 0.32rem 0.32rem;
+}
+
+.play--phone-landscape .seat--opp .player-head {
+  font-size: 0.68rem;
+}
+
+.play--phone-landscape .seat--opp .stack,
+.play--phone-landscape .seat--opp .street-chips {
+  font-size: 0.6rem;
+}
+
+.play--phone-landscape .seat--opp .cards-row,
+.play--phone-landscape .cards-row--hero-line {
+  min-height: 2.35rem;
+}
+
+.play--phone-landscape .cards-row--hero-line .card:not(:first-child) {
+  margin-left: -0.88em;
+}
+
+.play--phone-landscape .card.card--face,
+.play--phone-landscape .cards-row--hero-line .card.back {
+  min-height: 2.35em;
+  min-width: 1.62em;
+  font-size: 0.78rem;
+  padding: 0.08rem 0.36rem 0.14rem 0.12rem;
 }
 
 @media (min-width: 640px) {
