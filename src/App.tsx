@@ -106,17 +106,18 @@ function cardsForGameDisplay(
 
 type PlayTableLayout = 'wide' | 'narrow' | 'landscape'
 
-type SeatPos = { left: number; top: number; bottom?: boolean }
+type SeatPos = { left: number; top: number; bottom?: boolean; topEdge?: boolean }
 
 /**
- * Phone on its side: seats around the full-screen felt.
+ * Phone on its side: seats around a slightly wide felt.
+ * Top hands are pinned to the screen edge and spread toward the sides.
  * Hero is always on the bottom. With six players that is two along the top,
  * two on the sides, and two on the bottom — hero shifted left, one opponent right.
  */
 function landscapeTable(opponentCount: number): { heroLeft: number; opponents: SeatPos[] } {
-  const topL: SeatPos = { left: 34, top: 30 }
-  const topC: SeatPos = { left: 50, top: 27 }
-  const topR: SeatPos = { left: 66, top: 30 }
+  const topL: SeatPos = { left: 24, top: 0, topEdge: true }
+  const topC: SeatPos = { left: 50, top: 0, topEdge: true }
+  const topR: SeatPos = { left: 76, top: 0, topEdge: true }
   const sideL: SeatPos = { left: 14, top: 52 }
   const sideR: SeatPos = { left: 86, top: 52 }
   const botR: SeatPos = { left: 74, top: 0, bottom: true }
@@ -136,7 +137,7 @@ function landscapeTable(opponentCount: number): { heroLeft: number; opponents: S
     default:
       return {
         heroLeft: 26,
-        opponents: [sideL, topL, topC, topR, sideR, { left: 74, top: 0, bottom: true }],
+        opponents: [sideL, { ...topL, left: 20 }, topC, { ...topR, left: 80 }, sideR, { left: 74, top: 0, bottom: true }],
       }
   }
 }
@@ -1218,11 +1219,11 @@ function PlayScreen({
                 return (
                   <div
                     key={p.id}
-                    className={['seat', 'seat--opp', pos.bottom ? 'seat--bottom' : '']
+                    className={['seat', 'seat--opp', pos.bottom ? 'seat--bottom' : '', pos.topEdge ? 'seat--top' : '']
                       .filter(Boolean)
                       .join(' ')}
                     style={
-                      (pos.bottom
+                      (pos.bottom || pos.topEdge
                         ? { left: `${pos.left}%` }
                         : { left: `${pos.left}%`, top: `${pos.top}%` }) as CSSProperties
                     }
