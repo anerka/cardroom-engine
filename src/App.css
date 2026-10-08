@@ -1245,8 +1245,19 @@
   padding: 0.45rem 0.7rem;
 }
 
-.play--phone-landscape .seat--hero {
+.play--phone-landscape .seat--hero,
+.play--phone-landscape .seat--bottom {
+  top: auto;
   bottom: max(3.15rem, calc(env(safe-area-inset-bottom, 0px) + 2.9rem));
+  transform: translateX(-50%);
+}
+
+/* Bottom opponents use the same stack as you: name above, cards on the bottom edge. */
+.play--phone-landscape .seat--bottom .player-card {
+  flex-direction: column;
+}
+
+.play--phone-landscape .seat--hero {
   max-width: calc(100% - max(0.5rem, env(safe-area-inset-left, 0px)) - max(0.5rem, env(safe-area-inset-right, 0px)));
 }
 

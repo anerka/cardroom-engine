@@ -106,35 +106,49 @@ function cardsForGameDisplay(
 
 type PlayTableLayout = 'wide' | 'narrow' | 'landscape'
 
+type SeatPos = { left: number; top: number; bottom?: boolean }
+
+/**
+ * Phone on its side: seats around the full-screen felt.
+ * Hero is always on the bottom. With six players that is two along the top,
+ * two on the sides, and two on the bottom — hero shifted left, one opponent right.
+ */
+function landscapeTable(opponentCount: number): { heroLeft: number; opponents: SeatPos[] } {
+  const topL: SeatPos = { left: 34, top: 30 }
+  const topC: SeatPos = { left: 50, top: 27 }
+  const topR: SeatPos = { left: 66, top: 30 }
+  const sideL: SeatPos = { left: 14, top: 52 }
+  const sideR: SeatPos = { left: 86, top: 52 }
+  const botR: SeatPos = { left: 74, top: 0, bottom: true }
+  switch (opponentCount) {
+    case 0:
+      return { heroLeft: 50, opponents: [] }
+    case 1:
+      return { heroLeft: 50, opponents: [topC] }
+    case 2:
+      return { heroLeft: 50, opponents: [topL, topR] }
+    case 3:
+      return { heroLeft: 50, opponents: [sideL, topC, sideR] }
+    case 4:
+      return { heroLeft: 50, opponents: [sideL, topL, topR, sideR] }
+    case 5:
+      return { heroLeft: 26, opponents: [sideL, topL, topR, sideR, botR] }
+    default:
+      return {
+        heroLeft: 26,
+        opponents: [sideL, topL, topC, topR, sideR, { left: 74, top: 0, bottom: true }],
+      }
+  }
+}
+
 /**
  * Opponent seats on an upper ellipse (no seats at bottom — hero sits there).
  * θ is standard math angle from +x; sin negative puts seats in upper half of felt.
  * `narrow` uses a slightly smaller vertical arc; horizontal spread stays close to
  * desktop so end seats still sit near the left/right edges (same feel as Mac).
- * `landscape` is a phone on its side: the felt is the whole screen, so opponents
- * sit along the top and toward the sides, clear of the corner labels and the hero.
  */
-function opponentSeatPositions(
-  count: number,
-  layout: PlayTableLayout,
-): { left: number; top: number }[] {
+function opponentSeatPositions(count: number, layout: PlayTableLayout): SeatPos[] {
   if (count <= 0) return []
-  if (layout === 'landscape') {
-    const start = (-152 * Math.PI) / 180
-    const end = (-28 * Math.PI) / 180
-    const cx = 50
-    const cy = 41
-    const rx = 34
-    const ry = 6
-    return Array.from({ length: count }, (_, i) => {
-      const t = count === 1 ? 0.5 : i / (count - 1)
-      const theta = start + (end - start) * t
-      const left = cx + rx * Math.cos(theta)
-      /* Stay under the corner labels, still in the top half, away from the hero. */
-      const top = Math.min(44, Math.max(34, cy + ry * Math.sin(theta)))
-      return { left, top }
-    })
-  }
   const narrow = layout === 'narrow'
   const start = (-168 * Math.PI) / 180
   const end = (-12 * Math.PI) / 180
@@ -161,7 +175,7 @@ function opponentSeatPositions(
   })
 }
 
-const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 520px)'
+const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 700px)'
 
 function readPlayTableLayout(): { layout: PlayTableLayout; aiPauseMs: number } {
   const landscape = window.matchMedia(PHONE_LANDSCAPE_QUERY).matches
@@ -989,10 +1003,11 @@ function PlayScreen({
   }
 
   const opponentCount = snap.players.filter((p) => !p.isHuman).length
-  const oppPositions = useMemo(
-    () => opponentSeatPositions(opponentCount, tableLayout),
-    [opponentCount, tableLayout],
-  )
+  const tableSeats = useMemo(() => {
+    if (tableLayout === 'landscape') return landscapeTable(opponentCount)
+    return { heroLeft: 50, opponents: opponentSeatPositions(opponentCount, tableLayout) }
+  }, [opponentCount, tableLayout])
+  const oppPositions = tableSeats.opponents
 
   if (snap.phase === 'youBusted' || snap.phase === 'youWonTable') {
     const hero = snap.players.find((p) => p.isHuman)
@@ -1203,12 +1218,13 @@ function PlayScreen({
                 return (
                   <div
                     key={p.id}
-                    className="seat seat--opp"
+                    className={['seat', 'seat--opp', pos.bottom ? 'seat--bottom' : '']
+                      .filter(Boolean)
+                      .join(' ')}
                     style={
-                      {
-                        left: `${pos.left}%`,
-                        top: `${pos.top}%`,
-                      } as CSSProperties
+                      (pos.bottom
+                        ? { left: `${pos.left}%` }
+                        : { left: `${pos.left}%`, top: `${pos.top}%` }) as CSSProperties
                     }
                   >
                     {renderSeat(p, idx, false)}
@@ -1217,7 +1233,16 @@ function PlayScreen({
               })}
             </div>
             {hero && heroIdx >= 0 ? (
-              <div className="seat seat--hero">{renderSeat(hero, heroIdx, true)}</div>
+              <div
+                className="seat seat--hero"
+                style={
+                  tableLayout === 'landscape'
+                    ? ({ left: `${tableSeats.heroLeft}%` } as CSSProperties)
+                    : undefined
+                }
+              >
+                {renderSeat(hero, heroIdx, true)}
+              </div>
             ) : null}
           </div>
         </div>
