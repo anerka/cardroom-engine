@@ -3,7 +3,9 @@ import type { GameKind } from '../settings/types'
 
 export const GAME_ORDER: GameKind[] = ['stud', 'razz', 'studhilo', 'badugi', 'deuce7']
 
-const STORAGE_KEY = 'cardroom-career-stats-v1'
+const STORAGE_KEY = 'cardroom-career-stats-v2'
+/** Previous career blobs. Removed on load so saved play history starts over once. */
+const RETIRED_STORAGE_KEYS = ['cardroom-career-stats-v1']
 
 export interface GameRecord {
   gamesPlayed: number
@@ -89,8 +91,15 @@ function recordFrom(value: unknown): GameRecord {
   }
 }
 
+function discardRetiredCareerStats(): void {
+  for (const key of RETIRED_STORAGE_KEYS) {
+    localStorage.removeItem(key)
+  }
+}
+
 export function loadCareerStats(): CareerStats {
   try {
+    discardRetiredCareerStats()
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return emptyCareerStats()
     const parsed = JSON.parse(raw) as Partial<CareerStats>
@@ -112,6 +121,7 @@ export function loadCareerStats(): CareerStats {
 }
 
 export function saveCareerStats(stats: CareerStats): void {
+  discardRetiredCareerStats()
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stats))
 }
 
