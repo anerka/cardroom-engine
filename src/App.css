@@ -1173,8 +1173,7 @@
 }
 
 .play--phone-landscape .pot {
-  font-size: 0.82rem;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  display: none;
 }
 
 .play--phone-landscape .status-msg {
@@ -1224,15 +1223,26 @@
   display: none;
 }
 
-.play--phone-landscape .actions-slot,
-.play--phone-landscape .actions-bar {
-  max-width: min(100%, 36rem);
+.play--phone-landscape .actions-slot {
+  max-width: none;
+  width: 100%;
   min-height: 0;
+  justify-content: flex-end;
 }
 
-.play--phone-landscape .actions-bar .btn {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.84rem;
+.play--phone-landscape .actions-bar,
+.play--phone-landscape .actions-waiting-wrap {
+  width: auto;
+  max-width: min(62%, 24rem);
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.play--phone-landscape .actions-bar .btn,
+.play--phone-landscape .actions-waiting-wrap .btn {
+  padding: 0.72rem 1.15rem;
+  font-size: 1.05rem;
+  min-width: 5.1rem;
 }
 
 .play--phone-landscape .summary-panel {
@@ -1268,8 +1278,14 @@
 }
 
 .play--phone-landscape .felt-pot-badge {
-  top: 54%;
-  font-size: 0.75rem;
+  top: 50%;
+  z-index: 3;
+  padding: 0.5rem 1rem;
+  font-size: 1.15rem;
+}
+
+.play--phone-landscape .felt-pot-badge::before {
+  content: "Pot ";
 }
 
 .play--phone-landscape .seats-ring {
