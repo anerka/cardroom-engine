@@ -1271,7 +1271,14 @@ function PlayScreen({
             aria-label={onlyAutoCheck ? 'Continuing hand' : undefined}
           >
             {snap.humanMustAct && !onlyAutoCheck ? (
-              <div className="actions-bar">
+              <div
+                className={[
+                  'actions-bar',
+                  legal.includes('draw') ? '' : 'actions-bar--slots',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
                 {legal.includes('draw') ? (
                   <>
                     {canHumanDrawSelect ? (
@@ -1338,9 +1345,13 @@ function PlayScreen({
                   Other players are acting…
                 </p>
                 {hero?.folded ? (
-                  <button type="button" className="btn accent" onClick={skipToResult}>
-                    Skip to result
-                  </button>
+                  <div className="actions-bar actions-bar--skip">
+                    <span className="actions-spacer" aria-hidden="true" />
+                    <button type="button" className="btn accent" onClick={skipToResult}>
+                      Skip to result
+                    </button>
+                    <span className="actions-spacer" aria-hidden="true" />
+                  </div>
                 ) : null}
               </div>
             ) : null}

@@ -893,6 +893,10 @@
   position: static;
 }
 
+.actions-spacer {
+  display: none;
+}
+
 .end-screen {
   text-align: center;
   padding-top: max(1.25rem, env(safe-area-inset-top, 0px));
@@ -911,11 +915,13 @@
   font-size: 0.92rem;
 }
 
-.stats-screen {
+.stats-screen,
+.shell--menu,
+.end-screen,
+.settings-screen {
   /* Own scrollport. html/body use overflow-x: hidden, which on phones
      turns the document into a scroll container that does not move, so a
-     tall statistics page was stuck showing only the top. */
-  max-width: 26rem;
+     tall menu, game-over page, or settings form was stuck showing only the top. */
   height: 100vh;
   height: 100dvh;
   max-height: 100dvh;
@@ -924,6 +930,10 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
+}
+
+.stats-screen {
+  max-width: 26rem;
 }
 
 .stats-screen .session-stats-end {
@@ -1246,6 +1256,42 @@
   min-width: 5.1rem;
 }
 
+/* Fold, Call, and Bet share one row. Skip to result uses that same row and
+   sits in Call's column, not against the right edge. */
+.play--phone-landscape .actions-bar--slots,
+.play--phone-landscape .actions-bar--skip {
+  display: grid;
+  grid-template-columns: repeat(3, 7.15rem);
+  gap: 0.5rem;
+  justify-content: end;
+  width: max-content;
+  max-width: none;
+  margin-left: auto;
+}
+
+.play--phone-landscape .actions-bar--slots .btn,
+.play--phone-landscape .actions-bar--skip .btn {
+  width: 100%;
+  min-width: 0;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+
+.play--phone-landscape .actions-bar--skip .actions-spacer {
+  display: block;
+}
+
+.play--phone-landscape .actions-bar--skip .btn {
+  grid-column: 2;
+  white-space: normal;
+  line-height: 1.15;
+  font-size: 0.95rem;
+}
+
+.play--phone-landscape .actions-waiting {
+  display: none;
+}
+
 /* Hand result sits in the same bottom-right corner as Fold / Call / Bet,
    so the box does not cover the hero cards along the bottom. */
 .play--phone-landscape .summary-panel,
@@ -1337,6 +1383,51 @@
   min-width: 1.62em;
   font-size: 0.78rem;
   padding: 0.08rem 0.36rem 0.14rem 0.12rem;
+}
+
+/* Short landscape: menu, settings, and game over must scroll, and stay dense
+   enough that several choices are on screen at once. */
+@media (orientation: landscape) and (max-height: 700px) {
+  .shell--menu {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .shell--menu .topbar h1 {
+    font-size: 1.25rem;
+    margin-bottom: 0.1rem;
+  }
+
+  .shell--menu .tagline {
+    font-size: 0.78rem;
+  }
+
+  .shell--menu .menu-actions-wrap {
+    padding: 0.4rem 0 0.3rem;
+  }
+
+  .shell--menu .menu-main--actions {
+    gap: 0.35rem;
+  }
+
+  .shell--menu .menu-meta {
+    margin-top: 0.45rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .end-screen {
+    padding-top: 0.55rem;
+  }
+
+  .end-screen h1 {
+    font-size: 1.35rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .end-screen .session-stats-end {
+    margin-bottom: 0.75rem;
+    padding: 0.65rem 0.8rem;
+  }
 }
 
 @media (min-width: 640px) {
