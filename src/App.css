@@ -1245,10 +1245,26 @@
   min-width: 5.1rem;
 }
 
+/* Hand result sits in the same bottom-right corner as Fold / Call / Bet,
+   so the box does not cover the hero cards along the bottom. */
+.play--phone-landscape .summary-panel,
+.play--phone-landscape .install-app-banner {
+  align-self: flex-end;
+  width: min(46vw, 18rem);
+  max-width: min(46vw, 18rem);
+  margin-left: auto;
+}
+
 .play--phone-landscape .summary-panel {
   max-height: 38dvh;
   overflow: auto;
   padding: 0.65rem 0.8rem;
+}
+
+.play--phone-landscape .summary-panel .btn {
+  padding: 0.72rem 1.15rem;
+  font-size: 1.05rem;
+  min-width: 5.1rem;
 }
 
 .play--phone-landscape .install-app-banner {
