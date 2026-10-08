@@ -1101,7 +1101,7 @@
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: #14613c;
+  background: #0c2218;
 }
 
 .play--phone-landscape .play-table-column {
@@ -1128,8 +1128,9 @@
   padding-bottom: max(4.6rem, calc(env(safe-area-inset-bottom, 0px) + 4.2rem));
   padding-left: max(0.35rem, env(safe-area-inset-left, 0px));
   padding-right: max(0.35rem, env(safe-area-inset-right, 0px));
+  /* Same cloth as portrait .felt */
   background:
-    radial-gradient(ellipse 130% 120% at 50% 46%, #2f8f5c 0%, #1b7344 42%, #14613c 100%);
+    radial-gradient(ellipse 92% 70% at 50% 44%, #26734f 0%, #143828 55%, #0c2218 100%);
 }
 
 .play--phone-landscape .play-bar {
