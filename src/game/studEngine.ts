@@ -162,6 +162,13 @@ export interface HandReviewPlayer {
 export interface HandReview {
   handNumber: number
   summary: string
+  /** Seat that had the button during this hand. */
+  dealerId: string
+  /**
+   * What won the pot, shown in the corner of the recap.
+   * Stud hi/lo uses "High: …" and "Low: …" when both are awarded.
+   */
+  winningLines: string[]
   players: HandReviewPlayer[]
 }
 
@@ -231,6 +238,8 @@ export class StudEngine {
   private drawPending = new Set<number>()
   private stackAtHandStart = new Map<string, number>()
   lastHand: HandReview | null = null
+  /** Hand categories that won the pot just completed. */
+  private lastWinningLines: string[] = []
   stakes: EffectiveStakes
 
   constructor(
@@ -318,6 +327,7 @@ export class StudEngine {
     this.message = 'Session started. Deal first hand when ready.'
     this.lastSummary = null
     this.lastHand = null
+    this.lastWinningLines = []
     this.stackAtHandStart = new Map()
     this.sessionStartStack = baseStack
     this.sessionStats = emptySessionStats()
@@ -772,11 +782,35 @@ export class StudEngine {
     return s ? deuceHandLabel(s) : null
   }
 
+  /** Categories to print in the recap corner for one player's cards. */
+  private winningLinesFor(p: TablePlayer): string[] {
+    if (this.gameKind === 'studhilo') {
+      const cards = [...p.hole, ...p.up]
+      const high = bestHandScore(cards)
+      const low = bestEightOrBetterLowScore(cards)
+      const lines: string[] = []
+      if (high) lines.push(`High: ${handLabel(high)}`)
+      if (low) lines.push(`Low: ${hiLoLowHandLabel(low)}`)
+      return lines
+    }
+    const label = this.handLabelFor(p)
+    return label ? [label] : []
+  }
+
+  private rememberWinning(lines: Array<string | null>): void {
+    for (const line of lines) {
+      if (!line || this.lastWinningLines.includes(line)) continue
+      this.lastWinningLines.push(line)
+    }
+  }
+
   /** Freeze the finished table so it can be reopened after the next deal. */
   private rememberCompletedHand(): void {
     this.lastHand = {
       handNumber: this.handNumber,
       summary: this.lastSummary ?? '',
+      dealerId: this.players[this.dealerIndex]?.id ?? '',
+      winningLines: [...this.lastWinningLines],
       players: this.players.map((p) => {
         const start = this.stackAtHandStart.get(p.id) ?? p.stack
         return {
@@ -801,9 +835,11 @@ export class StudEngine {
     const endStreet = this.street
 
     const w = this.players.find((p) => p.id === winnerId)
+    this.lastWinningLines = []
     if (w) {
       w.stack += this.pot
       this.lastSummary = `${w.name} wins ${this.pot} chips.`
+      this.rememberWinning(this.winningLinesFor(w))
     }
     this.pot = 0
     this.phase = 'handSummary'
@@ -862,6 +898,7 @@ export class StudEngine {
     const human = this.players.find((p) => p.isHuman)
     const humanStackBefore = human?.stack ?? 0
     const humanFolded = human?.folded ?? true
+    this.lastWinningLines = []
 
     const layers = buildPotLayers(
       this.players.map((p) => ({
@@ -957,6 +994,7 @@ export class StudEngine {
         lines.push(
           `${layer.amount} → ${names}${scoreLabel ? ` (${scoreLabel})` : ''}`,
         )
+        this.rememberWinning([scoreLabel])
         continue
       }
 
@@ -978,6 +1016,7 @@ export class StudEngine {
         lines.push(
           `${layer.amount} → ${names}${best ? ` (High: ${handLabel(best)})` : ''}`,
         )
+        this.rememberWinning([best ? `High: ${handLabel(best)}` : null])
         continue
       }
 
@@ -1000,6 +1039,10 @@ export class StudEngine {
       lines.push(
         `${layer.amount} → High: ${highNames}${best ? ` (${handLabel(best)})` : ''} · Low: ${lowNames}${bestHiLoLow ? ` (${hiLoLowHandLabel(bestHiLoLow)})` : ''}`,
       )
+      this.rememberWinning([
+        best ? `High: ${handLabel(best)}` : null,
+        bestHiLoLow ? `Low: ${hiLoLowHandLabel(bestHiLoLow)}` : null,
+      ])
     }
     this.pot = 0
     this.lastSummary = lines.join(' · ')

@@ -190,102 +190,108 @@ function LastHandOverlay({
 }) {
   const opponents = review.players.filter((p) => !p.isHuman)
   const hero = review.players.find((p) => p.isHuman)
-  const placed =
+  const seats =
     tableLayout === 'landscape'
       ? landscapeTable(opponents.length)
       : { heroLeft: 50, opponents: opponentSeatPositions(opponents.length, tableLayout) }
-  // Face-up recap hands are wider than live hole cards. Pull side seats in
-  // so a full fan stays on a phone without moving the live table.
-  const pull = tableLayout === 'narrow' ? 0.74 : tableLayout === 'wide' ? 0.92 : 1
-  const seats = {
-    heroLeft: placed.heroLeft,
-    opponents: placed.opponents.map((pos) =>
-      pull === 1 || pos.bottom || pos.topEdge
-        ? pos
-        : { ...pos, left: 50 + (pos.left - 50) * pull },
-    ),
-  }
 
   const seatCard = (p: HandReview['players'][number], heroSeat: boolean) => (
     <div
-      className={[
-        'player-card',
-        p.folded ? 'folded' : '',
-        heroSeat ? 'player-card--hero' : '',
-        p.net > 0 ? 'player-card--won' : '',
-      ]
+      className={['player-card', p.folded ? 'folded' : '', heroSeat ? 'player-card--hero' : '']
         .filter(Boolean)
         .join(' ')}
     >
       <div className="player-head">
         <span>{p.name}</span>
+        {p.id === review.dealerId ? <span className="dealer-pill">D</span> : null}
         {p.folded ? <span className="fold-pill">Fold</span> : null}
       </div>
       <div className="stack">{p.stack}</div>
-      <div
-        className={[
-          'last-hand__net',
-          p.net > 0 ? 'last-hand__net--up' : '',
-          p.net < 0 ? 'last-hand__net--down' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        {formatSignedChips(p.net)}
-      </div>
-      <div className="hand-zone hand-zone--hero-line">
+      <div className="hand-zone hand-zone--hero-line" aria-label="All cards">
         <div className="cards-row cards-row--hero-line">
           {cardsForGameDisplay(gameKind, p.hole, p.up).map(({ card, faceKind, sunk }, i) => (
             <PlayingCardFace key={i} c={card} kind={faceKind} sunk={sunk} />
           ))}
         </div>
       </div>
-      {p.handText ? <div className="best-hand">{p.handText}</div> : null}
     </div>
   )
 
   return (
-    <div
-      className={['last-hand', tableLayout === 'landscape' ? 'play--phone-landscape' : '']
-        .filter(Boolean)
-        .join(' ')}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Hand ${review.handNumber}`}
-    >
-      <header className="last-hand__bar">
-        <strong>Hand {review.handNumber}</strong>
-        <button type="button" className="btn tiny" onClick={onClose}>
-          Close
-        </button>
-      </header>
-      <p className="last-hand__summary">{review.summary}</p>
-      <div className="felt last-hand__felt">
-        <div className="opponent-seats">
-          {opponents.map((p, i) => {
-            const pos = seats.opponents[i] ?? { left: 50, top: 22 }
-            return (
-              <div
-                key={p.id}
-                className={['seat', 'seat--opp', pos.bottom ? 'seat--bottom' : '', pos.topEdge ? 'seat--top' : '']
-                  .filter(Boolean)
-                  .join(' ')}
-                style={
-                  (pos.bottom || pos.topEdge
-                    ? { left: `${pos.left}%` }
-                    : { left: `${pos.left}%`, top: `${pos.top}%` }) as CSSProperties
-                }
-              >
-                {seatCard(p, false)}
-              </div>
-            )
-          })}
-        </div>
-        {hero ? (
-          <div className="seat seat--hero" style={{ left: `${seats.heroLeft}%` }}>
-            {seatCard(hero, true)}
+    <div className="last-hand" role="dialog" aria-modal="true" aria-label={`Hand ${review.handNumber}`}>
+      <div
+        className={['app', 'play', tableLayout === 'landscape' ? 'play--phone-landscape' : '']
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <header className="play-bar">
+          <div>
+            <strong>Hand {review.handNumber}</strong>
+            <div className="challenge-pill">{GAME_LABELS[gameKind]}</div>
           </div>
-        ) : null}
+          <div className="play-bar-right">
+            <button type="button" className="btn tiny ghost" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </header>
+
+        <div
+          className={['play-table-column', tableLayout === 'narrow' ? 'play-table-column--narrow' : '']
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <div className="table-wrap">
+            <div className="felt">
+              <div className="seats-ring" aria-hidden="true" />
+              <div className="opponent-seats">
+                {opponents.map((p, i) => {
+                  const pos = seats.opponents[i] ?? { left: 50, top: 22 }
+                  return (
+                    <div
+                      key={p.id}
+                      className={['seat', 'seat--opp', pos.bottom ? 'seat--bottom' : '', pos.topEdge ? 'seat--top' : '']
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={
+                        (pos.bottom || pos.topEdge
+                          ? { left: `${pos.left}%` }
+                          : { left: `${pos.left}%`, top: `${pos.top}%` }) as CSSProperties
+                      }
+                    >
+                      {seatCard(p, false)}
+                    </div>
+                  )
+                })}
+              </div>
+              {hero ? (
+                <div
+                  className="seat seat--hero"
+                  style={
+                    tableLayout === 'landscape'
+                      ? ({ left: `${seats.heroLeft}%` } as CSSProperties)
+                      : undefined
+                  }
+                >
+                  {seatCard(hero, true)}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {review.winningLines.length > 0 ? (
+            <div className="under-felt">
+              <div className="winning-hand">
+                <div className="winning-hand__kicker">Winning hand</div>
+                {review.winningLines.map((line) => (
+                  <div key={line} className="winning-hand__line">
+                    {line}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )
