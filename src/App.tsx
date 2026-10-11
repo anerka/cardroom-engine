@@ -10,6 +10,7 @@ import {
   StudEngine,
   type HumanAction,
   type SessionStats,
+  type HandReview,
   type StudSnapshot,
   type StudStreet,
 } from './game/studEngine'
@@ -174,6 +175,120 @@ function opponentSeatPositions(count: number, layout: PlayTableLayout): SeatPos[
     }
     return { left, top }
   })
+}
+
+function LastHandOverlay({
+  review,
+  gameKind,
+  tableLayout,
+  onClose,
+}: {
+  review: HandReview
+  gameKind: GameKind
+  tableLayout: PlayTableLayout
+  onClose: () => void
+}) {
+  const opponents = review.players.filter((p) => !p.isHuman)
+  const hero = review.players.find((p) => p.isHuman)
+  const placed =
+    tableLayout === 'landscape'
+      ? landscapeTable(opponents.length)
+      : { heroLeft: 50, opponents: opponentSeatPositions(opponents.length, tableLayout) }
+  // Face-up recap hands are wider than live hole cards. Pull side seats in
+  // so a full fan stays on a phone without moving the live table.
+  const pull = tableLayout === 'narrow' ? 0.74 : tableLayout === 'wide' ? 0.92 : 1
+  const seats = {
+    heroLeft: placed.heroLeft,
+    opponents: placed.opponents.map((pos) =>
+      pull === 1 || pos.bottom || pos.topEdge
+        ? pos
+        : { ...pos, left: 50 + (pos.left - 50) * pull },
+    ),
+  }
+
+  const seatCard = (p: HandReview['players'][number], heroSeat: boolean) => (
+    <div
+      className={[
+        'player-card',
+        p.folded ? 'folded' : '',
+        heroSeat ? 'player-card--hero' : '',
+        p.net > 0 ? 'player-card--won' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <div className="player-head">
+        <span>{p.name}</span>
+        {p.folded ? <span className="fold-pill">Fold</span> : null}
+      </div>
+      <div className="stack">{p.stack}</div>
+      <div
+        className={[
+          'last-hand__net',
+          p.net > 0 ? 'last-hand__net--up' : '',
+          p.net < 0 ? 'last-hand__net--down' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {formatSignedChips(p.net)}
+      </div>
+      <div className="hand-zone hand-zone--hero-line">
+        <div className="cards-row cards-row--hero-line">
+          {cardsForGameDisplay(gameKind, p.hole, p.up).map(({ card, faceKind, sunk }, i) => (
+            <PlayingCardFace key={i} c={card} kind={faceKind} sunk={sunk} />
+          ))}
+        </div>
+      </div>
+      {p.handText ? <div className="best-hand">{p.handText}</div> : null}
+    </div>
+  )
+
+  return (
+    <div
+      className={['last-hand', tableLayout === 'landscape' ? 'play--phone-landscape' : '']
+        .filter(Boolean)
+        .join(' ')}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Hand ${review.handNumber}`}
+    >
+      <header className="last-hand__bar">
+        <strong>Hand {review.handNumber}</strong>
+        <button type="button" className="btn tiny" onClick={onClose}>
+          Close
+        </button>
+      </header>
+      <p className="last-hand__summary">{review.summary}</p>
+      <div className="felt last-hand__felt">
+        <div className="opponent-seats">
+          {opponents.map((p, i) => {
+            const pos = seats.opponents[i] ?? { left: 50, top: 22 }
+            return (
+              <div
+                key={p.id}
+                className={['seat', 'seat--opp', pos.bottom ? 'seat--bottom' : '', pos.topEdge ? 'seat--top' : '']
+                  .filter(Boolean)
+                  .join(' ')}
+                style={
+                  (pos.bottom || pos.topEdge
+                    ? { left: `${pos.left}%` }
+                    : { left: `${pos.left}%`, top: `${pos.top}%` }) as CSSProperties
+                }
+              >
+                {seatCard(p, false)}
+              </div>
+            )
+          })}
+        </div>
+        {hero ? (
+          <div className="seat seat--hero" style={{ left: `${seats.heroLeft}%` }}>
+            {seatCard(hero, true)}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 700px)'
@@ -909,6 +1024,7 @@ function PlayScreen({
   const { layout: tableLayout, aiPauseMs } = usePlayTableLayout()
   const [aiDrive, setAiDrive] = useState(0)
   const [selectedDiscards, setSelectedDiscards] = useState<number[]>([])
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   useEffect(() => {
     const onFirstTouch = () => unlockBettingAudio()
@@ -1028,6 +1144,7 @@ function PlayScreen({
       challengeLine = `Challenge failed on ${GAME_LABELS[game.gameKind]}. Completed ${challengeCompleted} · Failed ${challengeFailed}.`
     }
     return (
+      <div className="end-screen-root">
       <div className="app shell end-screen">
         <h1>{wonTable ? 'You won the table' : 'Game over'}</h1>
         <p className="end-screen__game">{GAME_LABELS[game.gameKind]}</p>
@@ -1040,6 +1157,11 @@ function PlayScreen({
           lifetime={lifetime}
         />
         <div className="form-actions form-actions--center">
+          {snap.lastHand ? (
+            <button type="button" className="btn" onClick={() => setReviewOpen(true)}>
+              Last hand
+            </button>
+          ) : null}
           {onNextChallengeGame ? (
             <button type="button" className="btn primary" onClick={onNextChallengeGame}>
               Next game
@@ -1053,6 +1175,15 @@ function PlayScreen({
             Back to menu
           </button>
         </div>
+      </div>
+      {reviewOpen && snap.lastHand ? (
+        <LastHandOverlay
+          review={snap.lastHand}
+          gameKind={game.gameKind}
+          tableLayout={tableLayout}
+          onClose={() => setReviewOpen(false)}
+        />
+      ) : null}
       </div>
     )
   }
@@ -1193,6 +1324,11 @@ function PlayScreen({
         </div>
         <div className="play-bar-right">
           <span className="pot">Pot {snap.pot}</span>
+          {snap.lastHand ? (
+            <button type="button" className="btn tiny ghost" onClick={() => setReviewOpen(true)}>
+              Last hand
+            </button>
+          ) : null}
           <button type="button" className="btn tiny ghost" onClick={onQuit}>
             Quit
           </button>
@@ -1358,6 +1494,14 @@ function PlayScreen({
           </div>
         </div>
       </div>
+      {reviewOpen && snap.lastHand ? (
+        <LastHandOverlay
+          review={snap.lastHand}
+          gameKind={game.gameKind}
+          tableLayout={tableLayout}
+          onClose={() => setReviewOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }

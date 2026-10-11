@@ -141,6 +141,28 @@ export interface StudSnapshot {
    */
   bettingSoundNonce: number
   lastBettingSound: BettingSound | null
+  /** Finished hand kept so the table can be reopened after Next hand. */
+  lastHand: HandReview | null
+}
+
+export interface HandReviewPlayer {
+  id: string
+  name: string
+  isHuman: boolean
+  folded: boolean
+  hole: Card[]
+  up: Card[]
+  /** Stack after the pot was awarded. */
+  stack: number
+  /** Stack change from the start of the hand through the award. */
+  net: number
+  handText: string | null
+}
+
+export interface HandReview {
+  handNumber: number
+  summary: string
+  players: HandReviewPlayer[]
 }
 
 export type HumanAction =
@@ -207,6 +229,8 @@ export class StudEngine {
   private lastBettingSound: BettingSound | null = null
   private drawRound = 0
   private drawPending = new Set<number>()
+  private stackAtHandStart = new Map<string, number>()
+  lastHand: HandReview | null = null
   stakes: EffectiveStakes
 
   constructor(
@@ -246,6 +270,7 @@ export class StudEngine {
       sessionStats: cloneSessionStats(this.sessionStats),
       bettingSoundNonce: this.bettingSoundNonce,
       lastBettingSound: this.lastBettingSound,
+      lastHand: this.lastHand,
     }
   }
 
@@ -292,6 +317,8 @@ export class StudEngine {
     this.phase = 'betweenHands'
     this.message = 'Session started. Deal first hand when ready.'
     this.lastSummary = null
+    this.lastHand = null
+    this.stackAtHandStart = new Map()
     this.sessionStartStack = baseStack
     this.sessionStats = emptySessionStats()
     this.bettingSoundNonce = 0
@@ -351,6 +378,7 @@ export class StudEngine {
       return
     }
 
+    this.stackAtHandStart = new Map(this.players.map((p) => [p.id, p.stack]))
     this.resetForNewHand()
     this.deck = shuffle(freshDeck(), this.rng)
     this.pot = 0
@@ -720,6 +748,52 @@ export class StudEngine {
     }
   }
 
+  private handLabelFor(p: TablePlayer): string | null {
+    const cards = [...p.hole, ...p.up]
+    if (this.gameKind === 'stud') {
+      const s = bestHandScore(cards)
+      return s ? handLabel(s) : null
+    }
+    if (this.gameKind === 'razz') {
+      const s = bestRazzLowScore(cards)
+      return s ? razzHandLabel(s) : null
+    }
+    if (this.gameKind === 'studhilo') {
+      const high = bestHandScore(cards)
+      if (!high) return null
+      const low = bestEightOrBetterLowScore(cards)
+      return low ? `${handLabel(high)} / ${hiLoLowHandLabel(low)}` : handLabel(high)
+    }
+    if (this.gameKind === 'badugi') {
+      const s = bestBadugiScore(p.hole)
+      return s ? badugiHandLabel(s) : null
+    }
+    const s = bestDeuceToSevenLowScore(p.hole)
+    return s ? deuceHandLabel(s) : null
+  }
+
+  /** Freeze the finished table so it can be reopened after the next deal. */
+  private rememberCompletedHand(): void {
+    this.lastHand = {
+      handNumber: this.handNumber,
+      summary: this.lastSummary ?? '',
+      players: this.players.map((p) => {
+        const start = this.stackAtHandStart.get(p.id) ?? p.stack
+        return {
+          id: p.id,
+          name: p.name,
+          isHuman: p.isHuman,
+          folded: p.folded,
+          hole: p.hole.map((c) => ({ ...c })),
+          up: p.up.map((c) => ({ ...c })),
+          stack: p.stack,
+          net: p.stack - start,
+          handText: this.handLabelFor(p),
+        }
+      }),
+    }
+  }
+
   private awardPotToSingle(winnerId: string): void {
     const human = this.players.find((p) => p.isHuman)
     const humanStackBefore = human?.stack ?? 0
@@ -735,6 +809,7 @@ export class StudEngine {
     this.phase = 'handSummary'
     this.actionIndex = null
     this.message = 'Hand complete.'
+    this.rememberCompletedHand()
     this.rotateDealer()
 
     const humanPotShare = (human?.stack ?? 0) - humanStackBefore
@@ -789,8 +864,19 @@ export class StudEngine {
     const humanFolded = human?.folded ?? true
 
     const layers = buildPotLayers(
-      contenders.map((p) => ({ id: p.id, contributed: p.contributedPot })),
+      this.players.map((p) => ({
+        id: p.id,
+        contributed: p.contributedPot,
+        eligible: !p.folded,
+      })),
     )
+    if (layers.length === 0 && this.pot > 0) {
+      layers.push({ amount: this.pot, eligibleIds: contenders.map((p) => p.id) })
+    }
+    const layerSum = layers.reduce((sum, layer) => sum + layer.amount, 0)
+    if (layers.length > 0 && this.pot > layerSum) {
+      layers[0].amount += this.pot - layerSum
+    }
     const lines: string[] = []
     for (const layer of layers) {
       const eligible = contenders.filter((p) => layer.eligibleIds.includes(p.id))
@@ -920,6 +1006,7 @@ export class StudEngine {
     this.phase = 'handSummary'
     this.actionIndex = null
     this.message = 'Showdown.'
+    this.rememberCompletedHand()
     this.rotateDealer()
 
     const humanPotShare = (human?.stack ?? 0) - humanStackBefore
