@@ -182,11 +182,13 @@ function LastHandOverlay({
   gameKind,
   tableLayout,
   onClose,
+  onQuit,
 }: {
   review: HandReview
   gameKind: GameKind
   tableLayout: PlayTableLayout
   onClose: () => void
+  onQuit?: () => void
 }) {
   const opponents = review.players.filter((p) => !p.isHuman)
   const hero = review.players.find((p) => p.isHuman)
@@ -225,15 +227,22 @@ function LastHandOverlay({
           .join(' ')}
       >
         <header className="play-bar">
-          <div>
-            <strong>Hand {review.handNumber}</strong>
-            <div className="challenge-pill">{GAME_LABELS[gameKind]}</div>
-          </div>
-          <div className="play-bar-right">
+          <div className="play-bar-left">
+            <div className="play-bar-title">
+              <strong>Hand {review.handNumber}</strong>
+              <div className="challenge-pill">{GAME_LABELS[gameKind]}</div>
+            </div>
             <button type="button" className="btn tiny ghost" onClick={onClose}>
               Close
             </button>
           </div>
+          {onQuit ? (
+            <div className="play-bar-right">
+              <button type="button" className="btn tiny ghost" onClick={onQuit}>
+                Quit
+              </button>
+            </div>
+          ) : null}
         </header>
 
         <div
@@ -1319,22 +1328,24 @@ function PlayScreen({
         .join(' ')}
     >
       <header className="play-bar">
-        <div>
-          <strong>Hand {snap.handNumber}</strong>
-          <div className="challenge-pill">
-            {game.challenge
-              ? `Challenge ${game.challenge.index + 1}/${GAME_ORDER.length} · `
-              : ''}
-            {GAME_LABELS[game.gameKind]}
+        <div className="play-bar-left">
+          <div className="play-bar-title">
+            <strong>Hand {snap.handNumber}</strong>
+            <div className="challenge-pill">
+              {game.challenge
+                ? `Challenge ${game.challenge.index + 1}/${GAME_ORDER.length} · `
+                : ''}
+              {GAME_LABELS[game.gameKind]}
+            </div>
           </div>
-        </div>
-        <div className="play-bar-right">
-          <span className="pot">Pot {snap.pot}</span>
           {snap.lastHand ? (
             <button type="button" className="btn tiny ghost" onClick={() => setReviewOpen(true)}>
               Last hand
             </button>
           ) : null}
+        </div>
+        <div className="play-bar-right">
+          <span className="pot">Pot {snap.pot}</span>
           <button type="button" className="btn tiny ghost" onClick={onQuit}>
             Quit
           </button>
@@ -1506,6 +1517,7 @@ function PlayScreen({
           gameKind={game.gameKind}
           tableLayout={tableLayout}
           onClose={() => setReviewOpen(false)}
+          onQuit={onQuit}
         />
       ) : null}
     </div>

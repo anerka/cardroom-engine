@@ -280,10 +280,19 @@
   padding: 0.35rem 0.25rem 0.75rem;
 }
 
+.play-bar-left,
 .play-bar-right {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
+}
+
+.play-bar-left {
+  min-width: 0;
+}
+
+.play-bar-title {
+  min-width: 0;
 }
 
 .muted {
@@ -1163,8 +1172,8 @@
   pointer-events: auto;
 }
 
-.play--phone-landscape .play-bar > div:first-child {
-  max-width: 22%;
+.play--phone-landscape .play-bar-title {
+  max-width: 9.5rem;
   min-width: 0;
 }
 
