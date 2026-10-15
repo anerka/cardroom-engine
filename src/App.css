@@ -1479,12 +1479,95 @@
   opacity: 1;
 }
 
-/* A face-up seven-card fan is wider than the live backs. Tuck it slightly
-   on a phone so the outer cards stay on the cloth. */
-@media (max-width: 560px) {
-  .last-hand .cards-row--hero-line .card:not(:first-child) {
-    margin-left: -1.42em;
-  }
+/* Upright phone: a face-up stud hand fanned around the ellipse collapses
+   to a sliver. Stack each player across the cloth and leave a gap so the
+   rank and suit stay readable. */
+.last-hand--spread .play {
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  padding-bottom: 0.6rem;
+}
+
+.last-hand--spread .play-table-column {
+  overflow: auto;
+  justify-content: flex-start;
+  min-height: 0;
+}
+
+.last-hand--spread .table-wrap,
+.last-hand--spread .felt {
+  min-height: 0;
+  height: auto;
+}
+
+.last-hand--spread .felt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.55rem 0.35rem 0.75rem;
+}
+
+.last-hand--spread .seats-ring {
+  display: none;
+}
+
+.last-hand--spread .opponent-seats {
+  position: static;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.last-hand--spread .seat--opp,
+.last-hand--spread .seat--hero {
+  position: static;
+  transform: none;
+  left: auto;
+  top: auto;
+  bottom: auto;
+  width: 100%;
+  max-width: 100%;
+}
+
+.last-hand--spread .seat--opp .player-card,
+.last-hand--spread .player-card--hero {
+  width: 100%;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.last-hand--spread .cards-row--hero-line {
+  gap: 0.32rem;
+  width: 100%;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.last-hand--spread .cards-row--hero-line .card:not(:first-child) {
+  margin-left: 0;
+  box-shadow: none;
+}
+
+.last-hand--spread .cards-row--hero-line .card.card--face,
+.last-hand--spread .cards-row--hero-line .card.back {
+  flex: 1 1 0;
+  flex-shrink: 1;
+  min-width: 0;
+  width: auto;
+  max-width: 2.7rem;
+  min-height: 3.05rem;
+  margin-left: 0;
+  font-size: clamp(0.8rem, 3.5vw, 1rem);
+  padding: 0.16rem 0.1rem 0.2rem 0.14rem;
+}
+
+.last-hand--spread .card-face__rank {
+  white-space: nowrap;
 }
 
 .winning-hand {

@@ -192,6 +192,7 @@ function LastHandOverlay({
 }) {
   const opponents = review.players.filter((p) => !p.isHuman)
   const hero = review.players.find((p) => p.isHuman)
+  const spreadCards = tableLayout === 'narrow'
   const seats =
     tableLayout === 'landscape'
       ? landscapeTable(opponents.length)
@@ -220,7 +221,12 @@ function LastHandOverlay({
   )
 
   return (
-    <div className="last-hand" role="dialog" aria-modal="true" aria-label={`Hand ${review.handNumber}`}>
+    <div
+      className={['last-hand', spreadCards ? 'last-hand--spread' : ''].filter(Boolean).join(' ')}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Hand ${review.handNumber}`}
+    >
       <div
         className={['app', 'play', tableLayout === 'landscape' ? 'play--phone-landscape' : '']
           .filter(Boolean)
@@ -263,9 +269,11 @@ function LastHandOverlay({
                         .filter(Boolean)
                         .join(' ')}
                       style={
-                        (pos.bottom || pos.topEdge
-                          ? { left: `${pos.left}%` }
-                          : { left: `${pos.left}%`, top: `${pos.top}%` }) as CSSProperties
+                        spreadCards
+                          ? undefined
+                          : ((pos.bottom || pos.topEdge
+                              ? { left: `${pos.left}%` }
+                              : { left: `${pos.left}%`, top: `${pos.top}%` }) as CSSProperties)
                       }
                     >
                       {seatCard(p, false)}
