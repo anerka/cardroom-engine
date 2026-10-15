@@ -4,6 +4,7 @@ import {
   MAX_STARTING_STACK,
   MIN_STARTING_STACK,
   STAKES_BY_TIER,
+  isColorScheme,
   type GlobalSettings,
   type GameKind,
   type GameSettings,
@@ -89,6 +90,10 @@ export function loadGlobalSettings(): GlobalSettings {
         p.globalDifficulty === 'hard'
           ? p.globalDifficulty
           : DEFAULT_GLOBAL_SETTINGS.globalDifficulty,
+      colorScheme: isColorScheme(p.colorScheme)
+        ? p.colorScheme
+        : DEFAULT_GLOBAL_SETTINGS.colorScheme,
+      deckStyle: p.deckStyle === 'four' ? 'four' : 'classic',
     }
   } catch {
     return { ...DEFAULT_GLOBAL_SETTINGS }

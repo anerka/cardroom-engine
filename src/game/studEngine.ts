@@ -39,6 +39,9 @@ import {
 /** Includes opening complete / first bet on a street. */
 const MAX_RAISES_PER_STREET = 4
 
+/** Fixed seat names so a full table reads like a cardroom, not a numbered list. */
+const SEAT_NAMES = ['Ava', 'Noah', 'Mia', 'Leo', 'Ivy', 'Owen'] as const
+
 export interface TablePlayer {
   id: string
   isHuman: boolean
@@ -309,7 +312,7 @@ export class StudEngine {
       this.players.push({
         id: `ai-${i}`,
         isHuman: false,
-        name: `Bot ${i + 1}`,
+        name: SEAT_NAMES[i] ?? `Seat ${i + 1}`,
         stack: baseStack,
         folded: false,
         hole: [],

@@ -18,6 +18,20 @@ export type Difficulty = 'easy' | 'medium' | 'hard'
 
 export type TempoPreset = 'slow' | 'medium' | 'fast'
 
+/** Room and felt palette. Stored globally and applied to every screen. */
+export type ColorScheme = 'emerald' | 'midnight' | 'burgundy' | 'royal' | 'oasis'
+
+/** Classic red/black pips, or a four-color deck so suits separate at a glance. */
+export type DeckStyle = 'classic' | 'four'
+
+export const COLOR_SCHEMES: { id: ColorScheme; label: string; hint: string }[] = [
+  { id: 'emerald', label: 'Emerald', hint: 'Club green' },
+  { id: 'midnight', label: 'Midnight', hint: 'Navy cloth' },
+  { id: 'burgundy', label: 'Burgundy', hint: 'Wine felt' },
+  { id: 'royal', label: 'Royal', hint: 'Purple and gold' },
+  { id: 'oasis', label: 'Oasis', hint: 'Teal room' },
+]
+
 export interface StakesConfig {
   ante: number
   smallBet: number
@@ -72,6 +86,8 @@ export interface GlobalSettings {
   soundEnabled: boolean
   useGlobalDifficulty: boolean
   globalDifficulty: Difficulty
+  colorScheme: ColorScheme
+  deckStyle: DeckStyle
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -88,4 +104,12 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   soundEnabled: true,
   useGlobalDifficulty: false,
   globalDifficulty: 'medium',
+  colorScheme: 'emerald',
+  deckStyle: 'classic',
+}
+
+const COLOR_SCHEME_IDS = new Set<ColorScheme>(COLOR_SCHEMES.map((s) => s.id))
+
+export function isColorScheme(value: unknown): value is ColorScheme {
+  return typeof value === 'string' && COLOR_SCHEME_IDS.has(value as ColorScheme)
 }

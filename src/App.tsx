@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -28,12 +29,15 @@ import {
   saveSettingsForGame,
 } from './settings/storage'
 import {
+  COLOR_SCHEMES,
   DEFAULT_SETTINGS,
   GAME_LABELS,
   MAX_STARTING_STACK,
   MIN_STARTING_STACK,
   STAKES_BY_TIER,
   TEMPO_HANDS_BY_PRESET,
+  type ColorScheme,
+  type DeckStyle,
   type GlobalSettings,
   type GameKind,
   type GameSettings,
@@ -67,7 +71,14 @@ function PlayingCardFace({
   const suitClass = isRedSuit(c.suit) ? 'card--red-suit' : 'card--black-suit'
   return (
     <span
-      className={['card', 'card--face', kind, suitClass, sunk ? 'card--hero-sunk' : '']
+      className={[
+        'card',
+        'card--face',
+        kind,
+        suitClass,
+        `card--suit-${c.suit}`,
+        sunk ? 'card--hero-sunk' : '',
+      ]
         .filter(Boolean)
         .join(' ')}
     >
@@ -144,37 +155,85 @@ function landscapeTable(opponentCount: number): { heroLeft: number; opponents: S
 }
 
 /**
- * Opponent seats on an upper ellipse (no seats at bottom — hero sits there).
- * θ is standard math angle from +x; sin negative puts seats in upper half of felt.
- * `narrow` uses a slightly smaller vertical arc; horizontal spread stays close to
- * desktop so end seats still sit near the left/right edges (same feel as Mac).
+ * Seats around the oval, hero reserved at the bottom center.
+ * Wide screens drop the end seats down the rail so a full table reads as a ring.
+ * Narrow screens keep that same order higher, so seven hands stay off the hero cards.
  */
+const WIDE_OPPONENTS: SeatPos[][] = [
+  [],
+  [{ left: 50, top: 16 }],
+  [
+    { left: 28, top: 20 },
+    { left: 72, top: 20 },
+  ],
+  [
+    { left: 14, top: 46 },
+    { left: 50, top: 14 },
+    { left: 86, top: 46 },
+  ],
+  [
+    { left: 12, top: 50 },
+    { left: 32, top: 16 },
+    { left: 68, top: 16 },
+    { left: 88, top: 50 },
+  ],
+  [
+    { left: 11, top: 54 },
+    { left: 22, top: 24 },
+    { left: 50, top: 12 },
+    { left: 78, top: 24 },
+    { left: 89, top: 54 },
+  ],
+  [
+    { left: 10, top: 56 },
+    { left: 18, top: 30 },
+    { left: 36, top: 13 },
+    { left: 64, top: 13 },
+    { left: 82, top: 30 },
+    { left: 90, top: 56 },
+  ],
+]
+
+const NARROW_OPPONENTS: SeatPos[][] = [
+  [],
+  [{ left: 50, top: 16 }],
+  [
+    { left: 30, top: 18 },
+    { left: 70, top: 18 },
+  ],
+  [
+    { left: 20, top: 32 },
+    { left: 50, top: 12 },
+    { left: 80, top: 32 },
+  ],
+  [
+    { left: 18, top: 34 },
+    { left: 36, top: 13 },
+    { left: 64, top: 13 },
+    { left: 82, top: 34 },
+  ],
+  [
+    { left: 16, top: 34 },
+    { left: 32, top: 15 },
+    { left: 50, top: 10 },
+    { left: 68, top: 15 },
+    { left: 84, top: 34 },
+  ],
+  [
+    { left: 16, top: 34 },
+    { left: 28, top: 17 },
+    { left: 42, top: 10 },
+    { left: 58, top: 10 },
+    { left: 72, top: 17 },
+    { left: 84, top: 34 },
+  ],
+]
+
 function opponentSeatPositions(count: number, layout: PlayTableLayout): SeatPos[] {
   if (count <= 0) return []
-  const narrow = layout === 'narrow'
-  const start = (-168 * Math.PI) / 180
-  const end = (-12 * Math.PI) / 180
-  const cx = 50
-  const cy = narrow ? 42 : 41
-  /* rx was 27 on narrow + left clamp 22–78%, which bunched bots away from screen edges */
-  const rx = narrow ? 40 : 42
-  const ry = narrow ? 18 : 25
-  /** Slight inward shift for arc ends so a full 7-card fan stays inside the felt. */
-  const edgeNudgePct = narrow ? 2.25 : 1.75
-  return Array.from({ length: count }, (_, i) => {
-    const t = count === 1 ? 0.5 : i / (count - 1)
-    const theta = start + (end - start) * t
-    let left = cx + rx * Math.cos(theta)
-    let top = cy + ry * Math.sin(theta)
-    if (narrow) {
-      top = Math.min(38, Math.max(14, top))
-    }
-    if (count >= 2) {
-      if (i === 0) left += edgeNudgePct
-      if (i === count - 1) left -= edgeNudgePct
-    }
-    return { left, top }
-  })
+  const table = layout === 'narrow' ? NARROW_OPPONENTS : WIDE_OPPONENTS
+  const seats = table[Math.min(count, table.length - 1)] ?? []
+  return seats.slice(0, count)
 }
 
 function LastHandOverlay({
@@ -209,7 +268,7 @@ function LastHandOverlay({
         {p.id === review.dealerId ? <span className="dealer-pill">D</span> : null}
         {p.folded ? <span className="fold-pill">Fold</span> : null}
       </div>
-      <div className="stack">{p.stack}</div>
+      <div className="stack">{chips(p.stack)}</div>
       <div className="hand-zone hand-zone--hero-line" aria-label="All cards">
         <div className="cards-row cards-row--hero-line">
           {cardsForGameDisplay(gameKind, p.hole, p.up).map(({ card, faceKind, sunk }, i) => (
@@ -383,6 +442,129 @@ function finalStreetWinLabel(gameKind: GameKind): string {
   return isDrawKind(gameKind)
     ? 'Wins through the last draw'
     : 'Wins from 4th street to the last'
+}
+
+const GAME_BLURBS: Record<GameKind, string> = {
+  stud: 'High hand. Seven cards, best five.',
+  razz: 'Lowball stud. Aces play low.',
+  studhilo: 'High and an 8-or-better low split.',
+  badugi: 'Draw for one card of each suit.',
+  deuce7: 'Triple-draw lowball. Deuces low.',
+}
+
+const SCHEME_CLOTH: Record<ColorScheme, string> = {
+  emerald: 'linear-gradient(160deg, #3c9a64, #0b2e1c)',
+  midnight: 'linear-gradient(160deg, #3a6eae, #0c1e3d)',
+  burgundy: 'linear-gradient(160deg, #9a3a52, #3a101c)',
+  royal: 'linear-gradient(160deg, #6a4aaa, #1c1238)',
+  oasis: 'linear-gradient(160deg, #1a9a90, #083430)',
+}
+
+function applyAppearance(scheme: ColorScheme, deck: DeckStyle): void {
+  document.documentElement.dataset.scheme = scheme
+  document.documentElement.dataset.deck = deck
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) {
+    const color = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim()
+    if (color) meta.setAttribute('content', color)
+  }
+}
+
+function chips(n: number): string {
+  return n.toLocaleString('en-US')
+}
+
+function avatarLabel(name: string): string {
+  return name.slice(0, 1).toUpperCase()
+}
+
+function avatarHue(name: string): number {
+  let h = 0
+  for (const ch of name) h = (h * 33 + ch.charCodeAt(0)) % 360
+  return h
+}
+
+function betUnitFor(snap: StudSnapshot): number {
+  return snap.street <= 4 ? snap.stakes.smallBet : snap.stakes.bigBet
+}
+
+function raiseTargetFor(snap: StudSnapshot, isDraw: boolean): number {
+  if (!isDraw && snap.street === 3 && snap.streetHighBet < snap.stakes.smallBet) {
+    return snap.stakes.smallBet
+  }
+  return snap.streetHighBet + betUnitFor(snap)
+}
+
+function liveHandText(kind: GameKind, hole: Card[], up: Card[]): string | null {
+  if (kind === 'badugi') {
+    const score = bestBadugiScore(hole)
+    return score ? badugiHandLabel(score) : null
+  }
+  if (kind === 'deuce7') {
+    const score = bestDeuceToSevenLowScore(hole)
+    return score ? deuceHandLabel(score) : null
+  }
+  const cards = [...hole, ...up]
+  if (cards.length === 0) return null
+  if (kind === 'razz') {
+    const score = bestRazzLowScore(cards)
+    return score ? razzHandLabel(score) : null
+  }
+  if (kind === 'studhilo') {
+    const high = bestHandScore(cards)
+    if (!high) return null
+    const low = bestEightOrBetterLowScore(cards)
+    return low ? `${handLabel(high)} · ${hiLoLowHandLabel(low)}` : handLabel(high)
+  }
+  const high = bestHandScore(cards)
+  return high ? handLabel(high) : null
+}
+
+function streetSteps(gameKind: GameKind): { street: StudStreet; label: string }[] {
+  if (isDrawKind(gameKind)) {
+    return [
+      { street: 3, label: 'Deal' },
+      { street: 4, label: '1st' },
+      { street: 5, label: '2nd' },
+      { street: 6, label: '3rd' },
+    ]
+  }
+  return [
+    { street: 3, label: '3rd' },
+    { street: 4, label: '4th' },
+    { street: 5, label: '5th' },
+    { street: 6, label: '6th' },
+    { street: 7, label: 'River' },
+  ]
+}
+
+function ChipPile({ amount }: { amount: number }) {
+  const layers = amount <= 0 ? 0 : amount < 40 ? 2 : amount < 160 ? 3 : 4
+  if (layers === 0) return null
+  return (
+    <span className="chip-pile" aria-hidden="true">
+      {Array.from({ length: layers }, (_, i) => (
+        <i key={i} className={`chip chip--${i % 3}`} />
+      ))}
+    </span>
+  )
+}
+
+function StreetRail({ gameKind, street }: { gameKind: GameKind; street: StudStreet }) {
+  return (
+    <ol className="street-rail" aria-label="Current street">
+      {streetSteps(gameKind).map((step) => (
+        <li
+          key={step.street}
+          className={
+            street === step.street ? 'is-now' : street > step.street ? 'is-done' : ''
+          }
+        >
+          {step.label}
+        </li>
+      ))}
+    </ol>
+  )
 }
 
 function formatSignedChips(n: number): string {
@@ -577,6 +759,10 @@ export default function App() {
     setBettingSoundEnabled(globalSettings.soundEnabled)
   }, [globalSettings.soundEnabled])
 
+  useLayoutEffect(() => {
+    applyAppearance(globalSettings.colorScheme, globalSettings.deckStyle)
+  }, [globalSettings.colorScheme, globalSettings.deckStyle])
+
   const refresh = useCallback(() => {
     setGame((g) => (g ? { ...g, snap: g.engine.snapshot() } : null))
   }, [])
@@ -688,45 +874,52 @@ export default function App() {
     <div className="app shell shell--menu">
       <div className="menu-stack">
         <header className="topbar topbar--menu">
-          <h1>Cardroom Engine</h1>
-          <p className="tagline">
-            Fixed-limit stud variants — play money only.
-          </p>
+          <p className="brand-kicker">Play money</p>
+          <h1>Cardroom</h1>
+          <p className="tagline">Fixed-limit stud and draw. Sit down and deal.</p>
         </header>
         <div className="menu-actions-wrap">
           <div className="menu-main menu-main--actions">
-            {(['stud', 'razz', 'studhilo', 'badugi', 'deuce7'] as const).map((gameKind) => (
-              <div key={gameKind} className="menu-game-row">
-                <button
-                  type="button"
-                  className={['btn', selectedGame === gameKind ? 'primary' : 'ghost'].join(' ')}
-                  onClick={() => {
-                    setSelectedGame(gameKind)
-                    startGame(gameKind, null)
-                  }}
-                >
-                  Play {GAME_LABELS[gameKind]}
-                </button>
-                <button
-                  type="button"
-                  className="btn ghost btn-settings-icon"
-                  aria-label={`${GAME_LABELS[gameKind]} settings`}
-                  title={`${GAME_LABELS[gameKind]} settings`}
-                  onClick={() => {
-                    setSelectedGame(gameKind)
-                    setScreen('settings')
-                  }}
-                >
-                  ⚙
-                </button>
-              </div>
-            ))}
-            <button type="button" className="btn accent" onClick={() => startGame(GAME_ORDER[0], { index: 0 })}>
-              All Game Challenge
+            {(['stud', 'razz', 'studhilo', 'badugi', 'deuce7'] as const).map((gameKind) => {
+              const setup = settingsByGame[gameKind]
+              const players = setup.opponentCount + 1
+              return (
+                <div key={gameKind} className="menu-game-row">
+                  <button
+                    type="button"
+                    className="btn game-launch"
+                    onClick={() => {
+                      setSelectedGame(gameKind)
+                      startGame(gameKind, null)
+                    }}
+                  >
+                    <span className="game-launch__name">{GAME_LABELS[gameKind]}</span>
+                    <span className="game-launch__blurb">{GAME_BLURBS[gameKind]}</span>
+                    <span className="game-launch__meta">
+                      {players} players · {setup.stakes} stakes · {chips(setup.startingStack)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost btn-settings-icon"
+                    aria-label={`${GAME_LABELS[gameKind]} settings`}
+                    title={`${GAME_LABELS[gameKind]} settings`}
+                    onClick={() => {
+                      setSelectedGame(gameKind)
+                      setScreen('settings')
+                    }}
+                  >
+                    ⚙
+                  </button>
+                </div>
+              )
+            })}
+            <button type="button" className="btn accent challenge-launch" onClick={() => startGame(GAME_ORDER[0], { index: 0 })}>
+              <span className="game-launch__name">All Game Challenge</span>
+              <span className="game-launch__blurb">Win each game once, in order.</span>
             </button>
             <p className="menu-challenge-note muted">
-              Win every game, one at a time. Completed {career.challengeCompleted} · Failed{' '}
-              {career.challengeFailed}
+              Completed {career.challengeCompleted} · Failed {career.challengeFailed}
             </p>
             <button type="button" className="btn ghost" onClick={() => setScreen('stats')}>
               Statistics
@@ -734,23 +927,28 @@ export default function App() {
           </div>
         </div>
         <section className="menu-meta">
-          <h2>Current setup ({GAME_LABELS[selectedGame]})</h2>
+          <h2>{GAME_LABELS[selectedGame]}</h2>
           <ul>
-            <li>Opponents: {activeSettings.opponentCount}</li>
+            <li>{activeSettings.opponentCount + 1} at the table</li>
             <li>
-              Difficulty:{' '}
+              Difficulty{' '}
               {globalSettings.useGlobalDifficulty
-                ? `${globalSettings.globalDifficulty} (global)`
+                ? `${globalSettings.globalDifficulty} for every game`
                 : activeSettings.difficulty}
             </li>
             <li>
-              Tempo:{' '}
+              Tempo{' '}
               {activeSettings.useAdvancedTempo
-                ? `${activeSettings.handsPerLevel} hands / level`
+                ? `${activeSettings.handsPerLevel} hands per level`
                 : activeSettings.tempoPreset}
             </li>
-            <li>Stakes: {activeSettings.stakes}</li>
-            <li>Starting stack (each): {activeSettings.startingStack}</li>
+            <li>
+              {activeSettings.stakes} stakes · {chips(activeSettings.startingStack)} each
+            </li>
+            <li>
+              Felt {COLOR_SCHEMES.find((s) => s.id === globalSettings.colorScheme)?.label} ·{' '}
+              {globalSettings.deckStyle === 'four' ? 'four-color deck' : 'classic deck'}
+            </li>
           </ul>
         </section>
       </div>
@@ -794,8 +992,18 @@ function SettingsScreen({
   const [startingStackInput, setStartingStackInput] = useState(() =>
     String(initial.startingStack),
   )
+  const committedAppearance = useRef(false)
   const startingStackError = startingStackFieldError(startingStackInput)
   const startingStackValid = startingStackError === null
+
+  useLayoutEffect(() => {
+    applyAppearance(globalDraft.colorScheme, globalDraft.deckStyle)
+    return () => {
+      if (!committedAppearance.current) {
+        applyAppearance(globalSettings.colorScheme, globalSettings.deckStyle)
+      }
+    }
+  }, [globalDraft.colorScheme, globalDraft.deckStyle, globalSettings.colorScheme, globalSettings.deckStyle])
 
   useEffect(() => {
     setDraft(initial)
@@ -817,10 +1025,62 @@ function SettingsScreen({
           e.preventDefault()
           if (!startingStackValid) return
           const stack = Number(startingStackInput.trim())
+          committedAppearance.current = true
           onSave({ ...draft, startingStack: stack })
           onSaveGlobal(globalDraft)
         }}
       >
+        <fieldset className="settings-group">
+          <legend>Appearance</legend>
+          <p className="hint">Felt and room color for every game. The cloth updates as you tap.</p>
+          <div className="scheme-grid" role="radiogroup" aria-label="Color scheme">
+            {COLOR_SCHEMES.map((scheme) => {
+              const selected = globalDraft.colorScheme === scheme.id
+              return (
+                <button
+                  key={scheme.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  className={['scheme-swatch', selected ? 'is-selected' : ''].filter(Boolean).join(' ')}
+                  onClick={() => setGlobalDraft((g) => ({ ...g, colorScheme: scheme.id }))}
+                >
+                  <span
+                    className="scheme-swatch__cloth"
+                    style={{ background: SCHEME_CLOTH[scheme.id] }}
+                  />
+                  <span className="scheme-swatch__name">{scheme.label}</span>
+                  <span className="scheme-swatch__hint">{scheme.hint}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="deck-toggle" role="radiogroup" aria-label="Deck colors">
+            {(
+              [
+                ['classic', 'Classic', 'Red and black'],
+                ['four', 'Four color', 'Each suit its own color'],
+              ] as const
+            ).map(([id, label, hint]) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={globalDraft.deckStyle === id}
+                className={[
+                  'btn',
+                  'deck-choice',
+                  globalDraft.deckStyle === id ? 'primary' : 'ghost',
+                ].join(' ')}
+                onClick={() => setGlobalDraft((g) => ({ ...g, deckStyle: id }))}
+              >
+                <span>{label}</span>
+                <span className="deck-choice__hint">{hint}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
         <label className="checkbox-row">
           <input
             type="checkbox"
@@ -1047,7 +1307,32 @@ function PlayScreen({
   const { layout: tableLayout, aiPauseMs } = usePlayTableLayout()
   const [aiDrive, setAiDrive] = useState(0)
   const [selectedDiscards, setSelectedDiscards] = useState<number[]>([])
+  const drawSelectionKey =
+    game.gameKind === 'badugi' || game.gameKind === 'deuce7'
+      ? `${snap.handNumber}:${snap.actionIndex}:${snap.phase}:${snap.humanMustAct}`
+      : ''
+  const [discardKey, setDiscardKey] = useState(drawSelectionKey)
+  if (discardKey !== drawSelectionKey) {
+    setDiscardKey(drawSelectionKey)
+    setSelectedDiscards([])
+  }
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [preAction, setPreAction] = useState<'checkFold' | 'callAny' | null>(null)
+  const [preHand, setPreHand] = useState(snap.handNumber)
+  const [heroWasActing, setHeroWasActing] = useState(snap.humanMustAct)
+  if (preHand !== snap.handNumber) {
+    setPreHand(snap.handNumber)
+    setPreAction(null)
+  }
+  if (heroWasActing !== snap.humanMustAct) {
+    setHeroWasActing(snap.humanMustAct)
+    if (heroWasActing && !snap.humanMustAct) setPreAction(null)
+  }
+  const armedPre = preHand === snap.handNumber ? preAction : null
+
+  const togglePre = (kind: 'checkFold' | 'callAny') => {
+    setPreAction((current) => (current === kind ? null : kind))
+  }
 
   useEffect(() => {
     const onFirstTouch = () => unlockBettingAudio()
@@ -1090,6 +1375,7 @@ function PlayScreen({
 
   /* Only legal action is check (e.g. all-in runout) — no pointless tap. */
   useEffect(() => {
+    if (armedPre) return
     if (snap.phase !== 'betting' || !snap.humanMustAct) return
     if (!engine.snapshot().humanMustAct) return
     const actions = engine.legalHumanActions()
@@ -1098,6 +1384,7 @@ function PlayScreen({
       onRefresh()
     }
   }, [
+    armedPre,
     snap.phase,
     snap.humanMustAct,
     snap.actionIndex,
@@ -1116,14 +1403,6 @@ function PlayScreen({
   const canHumanDrawSelect =
     isDrawGame && snap.phase === 'draw' && snap.humanMustAct && legal.includes('draw')
 
-  useEffect(() => {
-    if (!canHumanDrawSelect) {
-      setSelectedDiscards([])
-      return
-    }
-    setSelectedDiscards((prev) => prev.filter((idx) => idx >= 0 && idx < drawMax))
-  }, [canHumanDrawSelect, drawMax, snap.handNumber, snap.actionIndex])
-
   const act = (a: HumanAction) => {
     const before = engine.snapshot().bettingSoundNonce
     engine.applyHuman(a)
@@ -1131,6 +1410,75 @@ function PlayScreen({
     playBettingSoundIfNew(before, s.bettingSoundNonce, s.lastBettingSound)
     onRefresh()
   }
+
+  useEffect(() => {
+    if (!armedPre) return
+    if (snap.phase !== 'betting' || !snap.humanMustAct) return
+    if (!engine.snapshot().humanMustAct) return
+    const actions = engine.legalHumanActions()
+    let next: HumanAction | null = null
+    if (armedPre === 'checkFold') {
+      if (actions.includes('check')) next = { type: 'check' }
+      else if (actions.includes('fold')) next = { type: 'fold' }
+    } else if (actions.includes('call')) {
+      next = { type: 'call' }
+    } else if (actions.includes('check')) {
+      next = { type: 'check' }
+    }
+    if (!next) return
+    const before = engine.snapshot().bettingSoundNonce
+    engine.applyHuman(next)
+    const s = engine.snapshot()
+    playBettingSoundIfNew(before, s.bettingSoundNonce, s.lastBettingSound)
+    onRefresh()
+  }, [
+    armedPre,
+    engine,
+    onRefresh,
+    snap.actionIndex,
+    snap.handNumber,
+    snap.humanMustAct,
+    snap.phase,
+    snap.street,
+  ])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return
+      if (reviewOpen) return
+      if (snap.phase === 'handSummary' && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault()
+        engine.acknowledgeHandSummary()
+        onRefresh()
+        return
+      }
+      if (!snap.humanMustAct) return
+      const actions = engine.legalHumanActions()
+      const key = e.key.toLowerCase()
+      let next: HumanAction | null = null
+      if ((key === 'f' || key === '1') && actions.includes('fold')) next = { type: 'fold' }
+      else if (
+        (key === 'c' || key === 'enter' || key === ' ' || key === '2') &&
+        (actions.includes('check') || actions.includes('call'))
+      ) {
+        next = { type: actions.includes('check') ? 'check' : 'call' }
+      } else if ((key === 'r' || key === 'b' || key === '3') && actions.includes('raise')) {
+        next = { type: 'raise' }
+      }
+      if (!next) return
+      e.preventDefault()
+      const before = engine.snapshot().bettingSoundNonce
+      engine.applyHuman(next)
+      const s = engine.snapshot()
+      playBettingSoundIfNew(before, s.bettingSoundNonce, s.lastBettingSound)
+      onRefresh()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [engine, onRefresh, reviewOpen, snap.handNumber, snap.humanMustAct, snap.phase, snap.actionIndex, snap.street])
 
   const skipToResult = () => {
     engine.fastForwardHand()
@@ -1303,6 +1651,14 @@ function PlayScreen({
         bestText = deuceHandLabel(deuceBest)
       }
     }
+    const wonPot =
+      snap.phase === 'handSummary' &&
+      !p.folded &&
+      (snap.lastHand?.players.find((x) => x.id === p.id)?.net ?? 0) > 0
+    const reading =
+      heroSeat && !showAllHoles && !p.folded
+        ? liveHandText(game.gameKind, p.hole, p.up)
+        : null
     return (
       <div
         className={[
@@ -1310,30 +1666,68 @@ function PlayScreen({
           isActor ? 'acting' : '',
           p.folded ? 'folded' : '',
           heroSeat ? 'player-card--hero' : '',
+          wonPot ? 'winner' : '',
         ]
           .filter(Boolean)
           .join(' ')}
       >
-        <div className="player-head">
-          <span>{p.name}</span>
-          {isDealer ? <span className="dealer-pill">D</span> : null}
-          {p.folded ? <span className="fold-pill">Fold</span> : null}
+        <div className="nameplate">
+          <span
+            className="avatar"
+            style={{ background: `hsl(${avatarHue(p.name)} 42% 36%)` }}
+            aria-hidden="true"
+          >
+            {avatarLabel(p.name)}
+          </span>
+          <span className="nameplate__meta">
+            <span className="player-head">
+              <span>{p.name}</span>
+              {p.folded ? <span className="fold-pill">Fold</span> : null}
+              {wonPot ? <span className="win-pill">Won</span> : null}
+            </span>
+            <span className="stack">{chips(p.stack)}</span>
+          </span>
+          {isDealer ? (
+            <span className="dealer-btn" title="Dealer">
+              D
+            </span>
+          ) : null}
         </div>
         {snap.phase === 'betting' && p.streetCommit > 0 ? (
-          <div className="bet-chip-marker">{p.streetCommit}</div>
+          <div className="bet-chip-marker">
+            <ChipPile amount={p.streetCommit} />
+            <span>{chips(p.streetCommit)}</span>
+          </div>
         ) : null}
-        <div className="stack">{p.stack}</div>
         {heroSeat ? heroLine : oppOrSummaryLine}
+        {reading ? <div className="hand-read">{reading}</div> : null}
         {bestText ? <div className="best-hand">{bestText}</div> : null}
       </div>
     )
   }
+
+  const heroCommit = hero?.streetCommit ?? 0
+  const heroStack = hero?.stack ?? 0
+  const toCall = Math.max(0, snap.streetHighBet - heroCommit)
+  const callChips = Math.min(heroStack, toCall)
+  const fullTarget = raiseTargetFor(snap, isDrawGame)
+  const fullCost = Math.max(0, fullTarget - heroCommit)
+  const shortRaise = heroStack > 0 && heroStack < fullCost
+  const raiseTo = shortRaise ? heroCommit + heroStack : fullTarget
+  const raiseVerb = shortRaise ? 'All-in' : raiseActionLabel(snap)
+  const potOddsPct =
+    toCall > 0 && snap.pot + toCall > 0
+      ? Math.round((100 * toCall) / (snap.pot + toCall))
+      : null
+  const potOddsRatio = toCall > 0 ? snap.pot / toCall : null
+  const crowd = opponentCount >= 5 ? 'packed' : opponentCount >= 3 ? 'full' : 'open'
 
   return (
     <div
       className={['app', 'play', tableLayout === 'landscape' ? 'play--phone-landscape' : '']
         .filter(Boolean)
         .join(' ')}
+      data-crowd={crowd}
     >
       <header className="play-bar">
         <div className="play-bar-left">
@@ -1344,6 +1738,7 @@ function PlayScreen({
                 ? `Challenge ${game.challenge.index + 1}/${GAME_ORDER.length} · `
                 : ''}
               {GAME_LABELS[game.gameKind]}
+              {snap.level > 0 ? ` · Level ${snap.level + 1}` : ''}
             </div>
           </div>
           {snap.lastHand ? (
@@ -1353,7 +1748,10 @@ function PlayScreen({
           ) : null}
         </div>
         <div className="play-bar-right">
-          <span className="pot">Pot {snap.pot}</span>
+          <span className="stakes-chip">
+            Ante {chips(snap.stakes.ante)} · {chips(snap.stakes.smallBet)}/
+            {chips(snap.stakes.bigBet)}
+          </span>
           <button type="button" className="btn tiny ghost" onClick={onQuit}>
             Quit
           </button>
@@ -1369,8 +1767,12 @@ function PlayScreen({
       >
         <div className="table-wrap">
           <div className="felt">
-            <div className="felt-pot-badge" aria-hidden="true">
-              {snap.pot}
+            <div className="felt-center">
+              <StreetRail gameKind={game.gameKind} street={snap.street} />
+              <div className="felt-pot-badge">
+                <ChipPile amount={snap.pot} />
+                <span>Pot {chips(snap.pot)}</span>
+              </div>
             </div>
             <div className="seats-ring" aria-hidden="true" />
             <div className="opponent-seats">
@@ -1480,30 +1882,32 @@ function PlayScreen({
                   </>
                 ) : null}
                 {legal.includes('fold') ? (
-                  <button type="button" className="btn danger" onClick={() => act({ type: 'fold' })}>
-                    Fold
+                  <button type="button" className="btn action-btn action-fold" onClick={() => act({ type: 'fold' })}>
+                    <span className="action-kicker">Fold</span>
                   </button>
                 ) : null}
                 {legal.includes('check') ? (
-                  <button type="button" className="btn ghost" onClick={() => act({ type: 'check' })}>
-                    Check
+                  <button type="button" className="btn action-btn action-call" onClick={() => act({ type: 'check' })}>
+                    <span className="action-kicker">Check</span>
                   </button>
                 ) : null}
                 {legal.includes('call') ? (
-                  <button type="button" className="btn" onClick={() => act({ type: 'call' })}>
-                    Call
+                  <button type="button" className="btn action-btn action-call" onClick={() => act({ type: 'call' })}>
+                    <span className="action-kicker">Call</span>
+                    <span className="action-amt">{chips(callChips)}</span>
                   </button>
                 ) : null}
                 {legal.includes('raise') ? (
-                  <button type="button" className="btn accent" onClick={() => act({ type: 'raise' })}>
-                    {raiseActionLabel(snap)}
+                  <button type="button" className="btn action-btn action-raise" onClick={() => act({ type: 'raise' })}>
+                    <span className="action-kicker">{raiseVerb}</span>
+                    <span className="action-amt">{chips(raiseTo)}</span>
                   </button>
                 ) : null}
               </div>
             ) : (snap.phase === 'betting' || snap.phase === 'draw') && !snap.humanMustAct ? (
               <div className="actions-waiting-wrap">
                 <p className="actions-waiting muted" aria-live="polite">
-                  Other players are acting…
+                  {hero?.folded ? 'You folded. The hand is still going.' : 'Waiting for the table…'}
                 </p>
                 {hero?.folded ? (
                   <div className="actions-bar actions-bar--skip">
@@ -1513,8 +1917,34 @@ function PlayScreen({
                     </button>
                     <span className="actions-spacer" aria-hidden="true" />
                   </div>
+                ) : snap.phase === 'betting' ? (
+                  <div className="pre-actions" role="group" aria-label="Act ahead">
+                    <button
+                      type="button"
+                      className={['btn', 'tiny', armedPre === 'checkFold' ? 'primary' : 'ghost'].join(' ')}
+                      aria-pressed={armedPre === 'checkFold'}
+                      onClick={() => togglePre('checkFold')}
+                    >
+                      Check / Fold
+                    </button>
+                    <button
+                      type="button"
+                      className={['btn', 'tiny', armedPre === 'callAny' ? 'primary' : 'ghost'].join(' ')}
+                      aria-pressed={armedPre === 'callAny'}
+                      onClick={() => togglePre('callAny')}
+                    >
+                      Call any
+                    </button>
+                  </div>
                 ) : null}
               </div>
+            ) : null}
+            {snap.humanMustAct && legal.includes('call') && potOddsPct !== null ? (
+              <p className="pot-odds">
+                Pot odds {potOddsRatio!.toFixed(1)} to 1 · {potOddsPct}% equity to call
+              </p>
+            ) : snap.humanMustAct && !legal.includes('draw') ? (
+              <p className="pot-odds hotkeys-hint">F fold · C check or call · R raise</p>
             ) : null}
           </div>
         </div>
