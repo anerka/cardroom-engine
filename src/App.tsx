@@ -132,7 +132,6 @@ function landscapeTable(opponentCount: number): { heroLeft: number; opponents: S
   const topR: SeatPos = { left: 76, top: 0, topEdge: true }
   const sideL: SeatPos = { left: 14, top: 52 }
   const sideR: SeatPos = { left: 86, top: 52 }
-  const botR: SeatPos = { left: 52, top: 0, bottom: true }
   switch (opponentCount) {
     case 0:
       return { heroLeft: 50, opponents: [] }
@@ -145,11 +144,18 @@ function landscapeTable(opponentCount: number): { heroLeft: number; opponents: S
     case 4:
       return { heroLeft: 50, opponents: [sideL, topL, topR, sideR] }
     case 5:
-      return { heroLeft: 26, opponents: [sideL, topL, topR, sideR, botR] }
+      return { heroLeft: 22, opponents: [sideL, topL, topR, sideR, { left: 72, top: 0, bottom: true }] }
     default:
       return {
-        heroLeft: 26,
-        opponents: [sideL, { ...topL, left: 20 }, topC, { ...topR, left: 80 }, sideR, { left: 52, top: 0, bottom: true }],
+        heroLeft: 20,
+        opponents: [
+          { left: 12, top: 46 },
+          { left: 24, top: 0, topEdge: true },
+          topC,
+          { left: 76, top: 0, topEdge: true },
+          { left: 88, top: 46 },
+          { left: 74, top: 0, bottom: true },
+        ],
       }
   }
 }
