@@ -526,24 +526,6 @@ function liveHandText(kind: GameKind, hole: Card[], up: Card[]): string | null {
   return high ? handLabel(high) : null
 }
 
-function streetSteps(gameKind: GameKind): { street: StudStreet; label: string }[] {
-  if (isDrawKind(gameKind)) {
-    return [
-      { street: 3, label: 'Deal' },
-      { street: 4, label: '1st' },
-      { street: 5, label: '2nd' },
-      { street: 6, label: '3rd' },
-    ]
-  }
-  return [
-    { street: 3, label: '3rd' },
-    { street: 4, label: '4th' },
-    { street: 5, label: '5th' },
-    { street: 6, label: '6th' },
-    { street: 7, label: 'River' },
-  ]
-}
-
 function ChipPile({ amount }: { amount: number }) {
   const layers = amount <= 0 ? 0 : amount < 40 ? 2 : amount < 160 ? 3 : 4
   if (layers === 0) return null
@@ -553,23 +535,6 @@ function ChipPile({ amount }: { amount: number }) {
         <i key={i} className={`chip chip--${i % 3}`} />
       ))}
     </span>
-  )
-}
-
-function StreetRail({ gameKind, street }: { gameKind: GameKind; street: StudStreet }) {
-  return (
-    <ol className="street-rail" aria-label="Current street">
-      {streetSteps(gameKind).map((step) => (
-        <li
-          key={step.street}
-          className={
-            street === step.street ? 'is-now' : street > step.street ? 'is-done' : ''
-          }
-        >
-          {step.label}
-        </li>
-      ))}
-    </ol>
   )
 }
 
@@ -1774,7 +1739,6 @@ function PlayScreen({
         <div className="table-wrap">
           <div className="felt">
             <div className="felt-center">
-              <StreetRail gameKind={game.gameKind} street={snap.street} />
               <div className="felt-pot-badge">
                 <ChipPile amount={snap.pot} />
                 <span>Pot {chips(snap.pot)}</span>
