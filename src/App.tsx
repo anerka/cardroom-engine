@@ -128,17 +128,16 @@ type PlayTableLayout = 'wide' | 'narrow' | 'landscape'
 type SeatPos = { left: number; top: number; bottom?: boolean; topEdge?: boolean }
 
 /**
- * Phone on its side: seats around a slightly wide felt.
- * Top hands are pinned to the screen edge and spread toward the sides.
- * Hero is always on the bottom. With six players that is two along the top,
- * two on the sides, and two on the bottom — hero shifted left, one opponent right.
+ * Hero sits at the bottom center for 2–5 and 7 players.
+ * Six players is the one PokerStars exception: hero shifts left so one
+ * opponent can take the bottom-right seat.
  */
 function landscapeTable(opponentCount: number): { heroLeft: number; opponents: SeatPos[] } {
   const topL: SeatPos = { left: 24, top: 0, topEdge: true }
   const topC: SeatPos = { left: 50, top: 0, topEdge: true }
   const topR: SeatPos = { left: 76, top: 0, topEdge: true }
-  const sideL: SeatPos = { left: 14, top: 52 }
-  const sideR: SeatPos = { left: 86, top: 52 }
+  const sideL: SeatPos = { left: 12, top: 46 }
+  const sideR: SeatPos = { left: 88, top: 46 }
   switch (opponentCount) {
     case 0:
       return { heroLeft: 50, opponents: [] }
@@ -151,102 +150,161 @@ function landscapeTable(opponentCount: number): { heroLeft: number; opponents: S
     case 4:
       return { heroLeft: 50, opponents: [sideL, topL, topR, sideR] }
     case 5:
-      return { heroLeft: 22, opponents: [sideL, topL, topR, sideR, { left: 72, top: 0, bottom: true }] }
+      return {
+        heroLeft: 32,
+        opponents: [
+          { left: 12, top: 40 },
+          { left: 34, top: 0, topEdge: true },
+          { left: 66, top: 0, topEdge: true },
+          { left: 88, top: 38 },
+          { left: 74, top: 0, bottom: true },
+        ],
+      }
     default:
       return {
-        heroLeft: 20,
+        heroLeft: 50,
         opponents: [
-          { left: 12, top: 46 },
+          { left: 11, top: 48 },
           { left: 24, top: 0, topEdge: true },
-          topC,
+          { left: 41, top: 0, topEdge: true },
+          { left: 59, top: 0, topEdge: true },
           { left: 76, top: 0, topEdge: true },
-          { left: 88, top: 46 },
-          { left: 74, top: 0, bottom: true },
+          { left: 89, top: 48 },
         ],
       }
   }
 }
 
 /**
- * Seats around the oval, hero reserved at the bottom center.
- * Wide screens drop the end seats down the rail so a full table reads as a ring.
- * Narrow screens keep that same order higher, so seven hands stay off the hero cards.
+ * Upright phone. Seats spread down both rails so each hand stays clear of
+ * the next. Hero is bottom center except at six players.
  */
-const WIDE_OPPONENTS: SeatPos[][] = [
-  [],
-  [{ left: 50, top: 16 }],
-  [
-    { left: 28, top: 20 },
-    { left: 72, top: 20 },
-  ],
-  [
-    { left: 14, top: 46 },
-    { left: 50, top: 14 },
-    { left: 86, top: 46 },
-  ],
-  [
-    { left: 12, top: 50 },
-    { left: 32, top: 16 },
-    { left: 68, top: 16 },
-    { left: 88, top: 50 },
-  ],
-  [
-    { left: 11, top: 54 },
-    { left: 22, top: 24 },
-    { left: 50, top: 12 },
-    { left: 78, top: 24 },
-    { left: 89, top: 54 },
-  ],
-  [
-    { left: 10, top: 56 },
-    { left: 18, top: 30 },
-    { left: 36, top: 13 },
-    { left: 64, top: 13 },
-    { left: 82, top: 30 },
-    { left: 90, top: 56 },
-  ],
-]
+function narrowTable(opponentCount: number): { heroLeft: number; opponents: SeatPos[] } {
+  switch (opponentCount) {
+    case 0:
+      return { heroLeft: 50, opponents: [] }
+    case 1:
+      return { heroLeft: 50, opponents: [{ left: 50, top: 18 }] }
+    case 2:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 22, top: 32 },
+          { left: 78, top: 32 },
+        ],
+      }
+    case 3:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 14, top: 48 },
+          { left: 50, top: 16 },
+          { left: 86, top: 48 },
+        ],
+      }
+    case 4:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 12, top: 52 },
+          { left: 30, top: 22 },
+          { left: 70, top: 22 },
+          { left: 88, top: 52 },
+        ],
+      }
+    case 5:
+      return {
+        heroLeft: 32,
+        opponents: [
+          { left: 14, top: 36 },
+          { left: 32, top: 16 },
+          { left: 62, top: 14 },
+          { left: 86, top: 36 },
+          { left: 78, top: 60 },
+        ],
+      }
+    default:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 14, top: 58 },
+          { left: 12, top: 34 },
+          { left: 32, top: 15 },
+          { left: 68, top: 15 },
+          { left: 88, top: 34 },
+          { left: 86, top: 58 },
+        ],
+      }
+  }
+}
 
-const NARROW_OPPONENTS: SeatPos[][] = [
-  [],
-  [{ left: 50, top: 16 }],
-  [
-    { left: 30, top: 18 },
-    { left: 70, top: 18 },
-  ],
-  [
-    { left: 20, top: 32 },
-    { left: 50, top: 12 },
-    { left: 80, top: 32 },
-  ],
-  [
-    { left: 18, top: 34 },
-    { left: 36, top: 13 },
-    { left: 64, top: 13 },
-    { left: 82, top: 34 },
-  ],
-  [
-    { left: 16, top: 34 },
-    { left: 32, top: 15 },
-    { left: 50, top: 10 },
-    { left: 68, top: 15 },
-    { left: 84, top: 34 },
-  ],
-  [
-    { left: 16, top: 34 },
-    { left: 28, top: 17 },
-    { left: 42, top: 10 },
-    { left: 58, top: 10 },
-    { left: 72, top: 17 },
-    { left: 84, top: 34 },
-  ],
-]
+/**
+ * Wide window. Same seating rule as the phone: hero bottom center, and left
+ * only when six people are dealt in.
+ */
+function wideTable(opponentCount: number): { heroLeft: number; opponents: SeatPos[] } {
+  switch (opponentCount) {
+    case 0:
+      return { heroLeft: 50, opponents: [] }
+    case 1:
+      return { heroLeft: 50, opponents: [{ left: 50, top: 16 }] }
+    case 2:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 28, top: 20 },
+          { left: 72, top: 20 },
+        ],
+      }
+    case 3:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 14, top: 46 },
+          { left: 50, top: 14 },
+          { left: 86, top: 46 },
+        ],
+      }
+    case 4:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 12, top: 50 },
+          { left: 32, top: 16 },
+          { left: 68, top: 16 },
+          { left: 88, top: 50 },
+        ],
+      }
+    case 5:
+      return {
+        heroLeft: 30,
+        opponents: [
+          { left: 14, top: 38 },
+          { left: 34, top: 15 },
+          { left: 58, top: 12 },
+          { left: 82, top: 28 },
+          { left: 76, top: 58 },
+        ],
+      }
+    default:
+      return {
+        heroLeft: 50,
+        opponents: [
+          { left: 10, top: 56 },
+          { left: 18, top: 30 },
+          { left: 36, top: 13 },
+          { left: 64, top: 13 },
+          { left: 82, top: 30 },
+          { left: 90, top: 56 },
+        ],
+      }
+  }
+}
 
-function opponentSeatPositions(count: number, layout: PlayTableLayout): SeatPos[] {
-  if (count <= 0) return []
-  const table = layout === 'narrow' ? NARROW_OPPONENTS : WIDE_OPPONENTS
-  const seats = table[Math.min(count, table.length - 1)] ?? []
-  return seats.slice(0, count)
+function tablePlan(layout: PlayTableLayout, opponentCount: number): { heroLeft: number; opponents: SeatPos[] } {
+  if (layout === 'landscape') return landscapeTable(opponentCount)
+  if (layout === 'narrow') return narrowTable(opponentCount)
+  return wideTable(opponentCount)
 }
 
 function LastHandOverlay({
@@ -264,11 +322,8 @@ function LastHandOverlay({
 }) {
   const opponents = review.players.filter((p) => !p.isHuman)
   const hero = review.players.find((p) => p.isHuman)
-  const spreadCards = tableLayout === 'narrow'
-  const seats =
-    tableLayout === 'landscape'
-      ? landscapeTable(opponents.length)
-      : { heroLeft: 50, opponents: opponentSeatPositions(opponents.length, tableLayout) }
+  const spreadCards = tableLayout !== 'wide'
+  const seats = tablePlan(tableLayout, opponents.length)
 
   const seatCard = (p: HandReview['players'][number], heroSeat: boolean) => (
     <div
@@ -300,7 +355,7 @@ function LastHandOverlay({
       aria-label={`Hand ${review.handNumber}`}
     >
       <div
-        className={['app', 'play', tableLayout === 'landscape' ? 'play--phone-landscape' : '']
+        className={['app', 'play', tableLayout === 'landscape' && !spreadCards ? 'play--phone-landscape' : '']
           .filter(Boolean)
           .join(' ')}
       >
@@ -356,11 +411,7 @@ function LastHandOverlay({
               {hero ? (
                 <div
                   className="seat seat--hero"
-                  style={
-                    tableLayout === 'landscape'
-                      ? ({ left: `${seats.heroLeft}%` } as CSSProperties)
-                      : undefined
-                  }
+                  style={{ left: `${seats.heroLeft}%` }}
                 >
                   {seatCard(hero, true)}
                 </div>
@@ -1526,10 +1577,10 @@ function PlayScreen({
   }
 
   const opponentCount = snap.players.filter((p) => !p.isHuman).length
-  const tableSeats = useMemo(() => {
-    if (tableLayout === 'landscape') return landscapeTable(opponentCount)
-    return { heroLeft: 50, opponents: opponentSeatPositions(opponentCount, tableLayout) }
-  }, [opponentCount, tableLayout])
+  const tableSeats = useMemo(
+    () => tablePlan(tableLayout, opponentCount),
+    [opponentCount, tableLayout],
+  )
   const oppPositions = tableSeats.opponents
 
   if (snap.phase === 'youBusted' || snap.phase === 'youWonTable') {
@@ -1833,11 +1884,7 @@ function PlayScreen({
             {hero && heroIdx >= 0 ? (
               <div
                 className="seat seat--hero"
-                style={
-                  tableLayout === 'landscape'
-                    ? ({ left: `${tableSeats.heroLeft}%` } as CSSProperties)
-                    : undefined
-                }
+                style={{ left: `${tableSeats.heroLeft}%` }}
               >
                 {renderSeat(hero, heroIdx, true)}
               </div>
