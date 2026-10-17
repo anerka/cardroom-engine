@@ -28,7 +28,9 @@ src/
 │   └── sidePots.ts       # Side pot calculation for all-in scenarios
 ├── settings/
 │   ├── types.ts          # GameKind, GameSettings, stakes tiers, tempo presets
-│   └── storage.ts        # localStorage persistence
+│   └── storage.ts        # localStorage persistence for settings
+├── session/
+│   └── resume.ts         # Save and restore the in-progress hand
 ├── audio/
 │   └── bettingSounds.ts  # Sound effects for betting actions
 ├── pwa/
@@ -100,7 +102,7 @@ Split-pot game. The best high hand and the best qualifying low hand each win hal
 | Tempo | Every N hands (slow = 12, medium = 8, fast = 4), stakes scale up ~15% per level |
 | AI opponents | 1–7 bots; three difficulty levels (easy / medium / hard) |
 | Bust-out | Busted AI players leave the table; you win when everyone else is eliminated |
-| Persistence | Settings and session state stored in `localStorage` |
+| Persistence | Settings, career stats, and the in-progress hand are stored in `localStorage`. Closing the app resumes that hand; Quit leaves it. |
 
 ## License
 

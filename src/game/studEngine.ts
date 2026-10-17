@@ -113,6 +113,68 @@ function cloneSessionStats(s: SessionStats): SessionStats {
   }
 }
 
+function cloneCards(cards: Card[]): Card[] {
+  return cards.map((c) => ({ rank: c.rank, suit: c.suit }))
+}
+
+function cloneHandReview(hand: HandReview): HandReview {
+  return {
+    handNumber: hand.handNumber,
+    summary: hand.summary,
+    dealerId: hand.dealerId,
+    winningLines: [...hand.winningLines],
+    players: hand.players.map((p) => ({
+      ...p,
+      hole: cloneCards(p.hole),
+      up: cloneCards(p.up),
+    })),
+  }
+}
+
+function clonePlayer(p: TablePlayer): TablePlayer {
+  return {
+    ...p,
+    hole: cloneCards(p.hole),
+    up: cloneCards(p.up),
+  }
+}
+
+/**
+ * Full engine state needed to continue a hand after the page is closed.
+ * The public snapshot omits the deck and betting-round bookkeeping.
+ */
+export interface PersistedEngineState {
+  settings: GameSettings
+  gameKind: GameKind
+  players: TablePlayer[]
+  dealerIndex: number
+  deck: Card[]
+  pot: number
+  street: 3 | 4 | 5 | 6 | 7
+  bringInIndex: number | null
+  actionIndex: number | null
+  phase: SessionPhase
+  raisesThisStreet: number
+  level: number
+  handNumber: number
+  message: string
+  lastSummary: string | null
+  sessionStartStack: number
+  sessionStats: SessionStats
+  highBet: number
+  checkRound: boolean
+  checkPending: number[]
+  lastAggressorSeat: number | null
+  bettingSoundNonce: number
+  lastBettingSound: BettingSound | null
+  drawRound: number
+  drawPending: number[]
+  stackAtHandStart: [string, number][]
+  lastHand: HandReview | null
+  lastWinningLines: string[]
+  stakes: EffectiveStakes
+}
+
 /** UI maps `chips` → bet/call WAV; `raise` → raise-over MP3. */
 export type BettingSound = 'chips' | 'raise'
 
@@ -284,6 +346,77 @@ export class StudEngine {
       lastBettingSound: this.lastBettingSound,
       lastHand: this.lastHand,
     }
+  }
+
+  /** Plain JSON snapshot of every field required to resume this table. */
+  toPersistable(): PersistedEngineState {
+    return {
+      settings: { ...this.settings },
+      gameKind: this.gameKind,
+      players: this.players.map(clonePlayer),
+      dealerIndex: this.dealerIndex,
+      deck: cloneCards(this.deck),
+      pot: this.pot,
+      street: this.street,
+      bringInIndex: this.bringInIndex,
+      actionIndex: this.actionIndex,
+      phase: this.phase,
+      raisesThisStreet: this.raisesThisStreet,
+      level: this.level,
+      handNumber: this.handNumber,
+      message: this.message,
+      lastSummary: this.lastSummary,
+      sessionStartStack: this.sessionStartStack,
+      sessionStats: cloneSessionStats(this.sessionStats),
+      highBet: this.highBet,
+      checkRound: this.checkRound,
+      checkPending: [...this.checkPending],
+      lastAggressorSeat: this.lastAggressorSeat,
+      bettingSoundNonce: this.bettingSoundNonce,
+      lastBettingSound: this.lastBettingSound,
+      drawRound: this.drawRound,
+      drawPending: [...this.drawPending],
+      stackAtHandStart: [...this.stackAtHandStart.entries()],
+      lastHand: this.lastHand ? cloneHandReview(this.lastHand) : null,
+      lastWinningLines: [...this.lastWinningLines],
+      stakes: { ...this.stakes },
+    }
+  }
+
+  /** Rebuild a table from `toPersistable()`. Later randomness uses `rng`. */
+  static restore(
+    state: PersistedEngineState,
+    rng: () => number = Math.random,
+  ): StudEngine {
+    const engine = new StudEngine({ ...state.settings }, state.gameKind, rng)
+    engine.players = state.players.map(clonePlayer)
+    engine.dealerIndex = state.dealerIndex
+    engine.deck = cloneCards(state.deck)
+    engine.pot = state.pot
+    engine.street = state.street
+    engine.bringInIndex = state.bringInIndex
+    engine.actionIndex = state.actionIndex
+    engine.phase = state.phase
+    engine.raisesThisStreet = state.raisesThisStreet
+    engine.level = state.level
+    engine.handNumber = state.handNumber
+    engine.message = state.message
+    engine.lastSummary = state.lastSummary
+    engine.sessionStartStack = state.sessionStartStack
+    engine.sessionStats = cloneSessionStats(state.sessionStats)
+    engine.highBet = state.highBet
+    engine.checkRound = state.checkRound
+    engine.checkPending = new Set(state.checkPending)
+    engine.lastAggressorSeat = state.lastAggressorSeat
+    engine.bettingSoundNonce = state.bettingSoundNonce
+    engine.lastBettingSound = state.lastBettingSound
+    engine.drawRound = state.drawRound
+    engine.drawPending = new Set(state.drawPending)
+    engine.stackAtHandStart = new Map(state.stackAtHandStart)
+    engine.lastHand = state.lastHand ? cloneHandReview(state.lastHand) : null
+    engine.lastWinningLines = [...state.lastWinningLines]
+    engine.stakes = { ...state.stakes }
+    return engine
   }
 
   private emitBettingSound(kind: BettingSound): void {

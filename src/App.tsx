@@ -57,6 +57,13 @@ import {
   type CareerStats,
   type GameRecord,
 } from './stats/career'
+import {
+  clearActiveSession,
+  peekActiveSession,
+  restoreActiveTable,
+  saveActiveSession,
+  sessionFromActive,
+} from './session/resume'
 
 function PlayingCardFace({
   c,
@@ -707,11 +714,32 @@ interface ActiveGame {
   engine: StudEngine
   snap: StudSnapshot
   challenge: ChallengeRun | null
+  /** True once this sitting has been written into career stats. */
+  careerRecorded: boolean
+}
+
+function activeGameFromRestored(): ActiveGame | null {
+  const restored = restoreActiveTable()
+  if (!restored) return null
+  return {
+    sessionId: restored.sessionId,
+    gameKind: restored.gameKind,
+    engine: restored.engine,
+    snap: restored.engine.snapshot(),
+    challenge: restored.challenge,
+    careerRecorded: restored.careerRecorded,
+  }
+}
+
+function initialAppState(): { screen: Screen; game: ActiveGame | null } {
+  const game = activeGameFromRestored()
+  return { screen: game ? 'play' : 'menu', game }
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('menu')
-  const [selectedGame, setSelectedGame] = useState<GameKind>('stud')
+  const [boot] = useState(initialAppState)
+  const [screen, setScreen] = useState<Screen>(boot.screen)
+  const [selectedGame, setSelectedGame] = useState<GameKind>(boot.game?.gameKind ?? 'stud')
   const [settingsByGame, setSettingsByGame] = useState<Record<GameKind, GameSettings>>(() => ({
     stud: loadSettings('stud'),
     razz: loadSettings('razz'),
@@ -721,9 +749,10 @@ export default function App() {
   }))
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => loadGlobalSettings())
   const [career, setCareer] = useState<CareerStats>(() => loadCareerStats())
-  const [game, setGame] = useState<ActiveGame | null>(null)
-  const [lastRecordedSessionId, setLastRecordedSessionId] = useState<number | null>(null)
-  const sessionCounter = useRef(0)
+  const [game, setGame] = useState<ActiveGame | null>(boot.game)
+  const sessionCounter = useRef(boot.game?.sessionId ?? 0)
+  /** Live table object. The engine is mutated in place between renders. */
+  const liveRef = useRef<ActiveGame | null>(boot.game)
   const activeSettings = settingsByGame[selectedGame]
 
   useEffect(() => {
@@ -733,6 +762,33 @@ export default function App() {
   useLayoutEffect(() => {
     applyAppearance(globalSettings.colorScheme, globalSettings.deckStyle)
   }, [globalSettings.colorScheme, globalSettings.deckStyle])
+
+  useEffect(() => {
+    liveRef.current = screen === 'play' ? game : null
+    if (screen === 'play' && game) saveActiveSession(sessionFromActive(game))
+  }, [game, screen])
+
+  useEffect(() => {
+    const flush = () => {
+      const current = liveRef.current
+      if (!current) return
+      const session = sessionFromActive(current)
+      const saved = peekActiveSession()
+      if (saved && saved.sessionId === session.sessionId && saved.careerRecorded) {
+        session.careerRecorded = true
+      }
+      saveActiveSession(session)
+    }
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onHide)
+    }
+  }, [])
 
   const refresh = useCallback(() => {
     setGame((g) => (g ? { ...g, snap: g.engine.snapshot() } : null))
@@ -750,17 +806,23 @@ export default function App() {
     engine.startSession()
     engine.beginHand()
     sessionCounter.current += 1
-    setGame({
+    const next: ActiveGame = {
       sessionId: sessionCounter.current,
       gameKind,
       engine,
       snap: engine.snapshot(),
       challenge,
-    })
+      careerRecorded: false,
+    }
+    liveRef.current = next
+    saveActiveSession(sessionFromActive(next))
+    setGame(next)
     setScreen('play')
   }, [globalSettings.globalDifficulty, globalSettings.useGlobalDifficulty, settingsByGame])
 
   const leaveToMenu = useCallback(() => {
+    liveRef.current = null
+    clearActiveSession()
     setGame(null)
     setScreen('menu')
   }, [])
@@ -768,7 +830,7 @@ export default function App() {
   if (
     game &&
     (game.snap.phase === 'youWonTable' || game.snap.phase === 'youBusted') &&
-    game.sessionId !== lastRecordedSessionId
+    !game.careerRecorded
   ) {
     const hero = game.snap.players.find((p) => p.isHuman)
     const net = (hero?.stack ?? 0) - game.snap.sessionStartStack
@@ -790,7 +852,9 @@ export default function App() {
       challengeResult,
     )
     saveCareerStats(next)
-    setLastRecordedSessionId(game.sessionId)
+    const recorded: ActiveGame = { ...game, careerRecorded: true }
+    saveActiveSession(sessionFromActive(recorded))
+    setGame(recorded)
     setCareer(next)
   }
 
