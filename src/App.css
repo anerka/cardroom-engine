@@ -1044,17 +1044,37 @@
 
 @media (max-width: 560px) {
   .play {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
     padding-left: max(0.4rem, env(safe-area-inset-left, 0px));
     padding-right: max(0.4rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .play-table-column--narrow {
+    flex: 1 1 auto;
+    min-height: 0;
+    justify-content: flex-start;
+  }
+
+  .play-table-column--narrow .table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .play-table-column--narrow .felt {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    padding-bottom: clamp(6.4rem, 22vw, 8rem);
   }
 
   .table-wrap,
   .felt {
-    min-height: min(52vh, 440px);
-  }
-
-  .felt {
-    padding-bottom: clamp(7rem, 26vw, 9.5rem);
+    min-height: 0;
   }
 
   .seat--opp .player-card {
@@ -1147,7 +1167,7 @@
 
 .play--phone-landscape .felt {
   padding-top: max(2.4rem, env(safe-area-inset-top, 0px));
-  padding-bottom: max(4.6rem, calc(env(safe-area-inset-bottom, 0px) + 4.2rem));
+  padding-bottom: max(6.4rem, calc(env(safe-area-inset-bottom, 0px) + 6rem));
   padding-left: max(0.35rem, env(safe-area-inset-left, 0px));
   padding-right: max(0.35rem, env(safe-area-inset-right, 0px));
   /* Same cloth as portrait .felt */
@@ -1281,17 +1301,19 @@
 }
 
 .play--phone-landscape .actions-slot {
-  max-width: none;
-  width: 100%;
+  width: min(22rem, calc(50% - 2.85rem));
+  max-width: min(22rem, calc(50% - 2.85rem));
   min-height: 0;
+  margin-left: auto;
+  align-items: stretch;
   justify-content: flex-end;
 }
 
 .play--phone-landscape .actions-bar,
 .play--phone-landscape .actions-waiting-wrap {
-  width: auto;
-  max-width: min(62%, 24rem);
-  margin-left: auto;
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
   justify-content: flex-end;
 }
 
@@ -1307,12 +1329,12 @@
 .play--phone-landscape .actions-bar--slots,
 .play--phone-landscape .actions-bar--skip {
   display: grid;
-  grid-template-columns: repeat(3, 7.15rem);
-  gap: 0.5rem;
-  justify-content: end;
-  width: max-content;
-  max-width: none;
-  margin-left: auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  justify-content: stretch;
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
 }
 
 .play--phone-landscape .actions-bar--slots .btn,
@@ -1373,7 +1395,7 @@
 .play--phone-landscape .seat--hero,
 .play--phone-landscape .seat--bottom {
   top: auto;
-  bottom: max(3.15rem, calc(env(safe-area-inset-bottom, 0px) + 2.9rem));
+  bottom: max(5.55rem, calc(env(safe-area-inset-bottom, 0px) + 5.15rem));
   transform: translateX(-50%);
 }
 
@@ -1577,29 +1599,33 @@
 }
 
 .last-hand--spread .cards-row--hero-line {
-  gap: 0.32rem;
-  width: 100%;
+  gap: 0;
+  width: auto;
+  max-width: 100%;
   justify-content: center;
   align-items: flex-start;
-  min-height: 0;
+  min-height: 3.2rem;
+  overflow-x: auto;
 }
 
 .last-hand--spread .cards-row--hero-line .card:not(:first-child) {
-  margin-left: 0;
-  box-shadow: none;
+  margin-left: -1.02em;
 }
 
+.last-hand .seat--opp .card.card--face,
+.last-hand .seat--opp .cards-row--hero-line .card.back,
+.last-hand .seat--hero .card.card--face,
+.last-hand .seat--hero .cards-row--hero-line .card.back,
 .last-hand--spread .cards-row--hero-line .card.card--face,
 .last-hand--spread .cards-row--hero-line .card.back {
-  flex: 1 1 0;
-  flex-shrink: 1;
-  min-width: 0;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  min-width: 2.05em;
   width: auto;
-  max-width: 2.7rem;
-  min-height: 3.05rem;
-  margin-left: 0;
-  font-size: clamp(0.8rem, 3.5vw, 1rem);
-  padding: 0.16rem 0.1rem 0.2rem 0.14rem;
+  max-width: none;
+  min-height: 3.2em;
+  font-size: clamp(0.98rem, 3.2vw, 1.18rem);
+  padding: 0.12rem 0.5rem 0.22rem 0.16rem;
 }
 
 .last-hand--spread .card-face__rank {
@@ -2174,10 +2200,10 @@ html[data-deck='four'] .card--suit-s {
 }
 
 .play--phone-landscape .felt::before {
-  left: 9%;
-  right: 9%;
-  top: 11%;
-  bottom: 16%;
+  left: 8%;
+  right: 8%;
+  top: 12%;
+  bottom: 24%;
 }
 
 .play--phone-landscape .felt-center {
@@ -2208,7 +2234,7 @@ html[data-deck='four'] .card--suit-s {
 .play--phone-landscape .actions-waiting-wrap,
 .play--phone-landscape .pre-actions,
 .play--phone-landscape .actions-bar {
-  max-width: calc(100vw - 1.2rem);
+  max-width: 100%;
 }
 
 .play--phone-landscape .pre-actions .btn,
@@ -2240,10 +2266,16 @@ html[data-deck='four'] .card--suit-s {
 }
 
 @media (max-width: 560px) {
+  .play[data-crowd='packed'] .seat--opp .card.card--face,
+  .play[data-crowd='packed'] .seat--opp .card.back {
+    font-size: 0.88rem;
+  }
+
   .felt::before {
-    left: 2%;
-    right: 2%;
-    bottom: 22%;
+    left: 3%;
+    right: 3%;
+    top: 3%;
+    bottom: 18%;
   }
 
   .seat--hero .card.card--face,
