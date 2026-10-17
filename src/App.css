@@ -1365,15 +1365,15 @@
 .play--phone-landscape .summary-panel,
 .play--phone-landscape .install-app-banner {
   align-self: flex-end;
-  width: min(46vw, 18rem);
-  max-width: min(46vw, 18rem);
+  width: min(40vw, calc(50% - 3.6rem));
+  max-width: min(40vw, calc(50% - 3.6rem));
   margin-left: auto;
 }
 
 .play--phone-landscape .summary-panel {
-  max-height: 38dvh;
+  max-height: 9rem;
   overflow: auto;
-  padding: 0.65rem 0.8rem;
+  padding: 0.55rem 0.7rem;
 }
 
 .play--phone-landscape .summary-panel .btn {
