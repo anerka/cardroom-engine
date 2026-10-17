@@ -7,6 +7,7 @@ const server = await createServer({
 })
 try {
   await server.ssrLoadModule('/src/session/resume.selfcheck.ts')
+  await server.ssrLoadModule('/src/audio/bettingSounds.selfcheck.ts')
 } finally {
   await server.close()
 }

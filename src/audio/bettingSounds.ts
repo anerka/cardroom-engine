@@ -2,67 +2,182 @@ import type { BettingSound } from '../game/studEngine'
 
 const url = (file: string) => `${import.meta.env.BASE_URL}sounds/${file}`
 
-const cache = new Map<BettingSound, HTMLAudioElement>()
-
-let audioUnlocked = false
-let soundsEnabled = true
-
-export function setBettingSoundEnabled(enabled: boolean): void {
-  soundsEnabled = enabled
-}
-
-function getAudio(kind: BettingSound): HTMLAudioElement {
-  let a = cache.get(kind)
-  if (!a) {
-    const src = kind === 'chips' ? url('PokerAction.wav') : url('PokerRaise.mp3')
-    a = new Audio(src)
-    a.preload = 'auto'
-    /* Helps some mobile WebViews treat clip as user-media-capable */
-    a.setAttribute('playsinline', 'true')
-    cache.set(kind, a)
-  }
-  return a
-}
-
 /**
- * Run once inside a user gesture (tap/click). Mobile Safari/Chrome block
- * `Audio.play()` until the document has been “unlocked” this way.
+ * An <audio> element uses the platform "playback" session, which ducks or
+ * pauses Spotify. Short game sounds use an AudioContext instead, and the
+ * page session is set to ambient so they mix at the listener's current volume.
+ * With sounds off, nothing here is constructed, so other music is left alone.
  */
-export function unlockBettingAudio(): void {
-  if (audioUnlocked) return
-  audioUnlocked = true
-  for (const kind of ['chips', 'raise'] as BettingSound[]) {
-    const a = getAudio(kind)
-    const v = a.volume
-    a.volume = 0.0001
-    void a
-      .play()
-      .then(() => {
-        a.pause()
-        a.currentTime = 0
-        a.volume = v
-      })
-      .catch(() => {
-        a.volume = v
-      })
+type AudioSessionLike = { type: string }
+
+let soundsEnabled = true
+let ctx: AudioContext | null = null
+const buffers = new Map<BettingSound, AudioBuffer>()
+let pending = Promise.resolve()
+
+function track(work: Promise<unknown>): void {
+  pending = pending.then(() => work).then(
+    () => undefined,
+    () => undefined,
+  )
+}
+
+/** Resolves after in-flight load, resume, and shutdown work. */
+export function settleBettingAudio(): Promise<void> {
+  return pending
+}
+
+function audioSession(): AudioSessionLike | null {
+  const session = (globalThis.navigator as Navigator & { audioSession?: AudioSessionLike } | undefined)
+    ?.audioSession
+  return session ?? null
+}
+
+function preferAmbient(): void {
+  const session = audioSession()
+  if (!session || session.type === 'ambient') return
+  try {
+    session.type = 'ambient'
+  } catch {
+    /* The platform picks a session on its own. */
   }
 }
 
-/** Plays bet/call (chips) or raise-over (raise) SFX. Prefer calling right after a user tap or after unlock. */
-export function playBettingSound(kind: BettingSound): void {
-  if (!soundsEnabled) return
-  const a = getAudio(kind)
+function releaseSession(): void {
+  const session = audioSession()
+  if (!session || session.type === 'auto') return
   try {
-    a.currentTime = 0
-    void a.play().catch(() => {
-      /* autoplay policy / missing file */
-    })
+    session.type = 'auto'
   } catch {
     /* ignore */
   }
 }
 
-/** If the engine emitted a new betting sound since `beforeNonce`, play it (call synchronously after apply/step). */
+function audioContextCtor(): (new (options?: AudioContextOptions) => AudioContext) | null {
+  const g = globalThis as typeof globalThis & {
+    AudioContext?: new (options?: AudioContextOptions) => AudioContext
+    webkitAudioContext?: new (options?: AudioContextOptions) => AudioContext
+  }
+  return g.AudioContext ?? g.webkitAudioContext ?? null
+}
+
+function createContext(): AudioContext | null {
+  const Ctor = audioContextCtor()
+  if (!Ctor) return null
+  preferAmbient()
+  try {
+    return new Ctor({ latencyHint: 'interactive' })
+  } catch {
+    try {
+      return new Ctor()
+    } catch {
+      return null
+    }
+  }
+}
+
+function liveContext(): AudioContext | null {
+  if (!soundsEnabled) return null
+  if (ctx && ctx.state !== 'closed') return ctx
+  ctx = createContext()
+  return ctx
+}
+
+async function loadBuffer(kind: BettingSound, context: AudioContext): Promise<AudioBuffer | null> {
+  const cached = buffers.get(kind)
+  if (cached) return cached
+  try {
+    const src = kind === 'chips' ? url('PokerAction.wav') : url('PokerRaise.mp3')
+    const response = await fetch(src)
+    if (!response.ok) return null
+    const raw = await response.arrayBuffer()
+    const copy = raw.slice(0)
+    const decoded = await context.decodeAudioData(copy)
+    if (!soundsEnabled || ctx !== context || context.state === 'closed') return null
+    buffers.set(kind, decoded)
+    return decoded
+  } catch {
+    return null
+  }
+}
+
+function playBuffer(buffer: AudioBuffer): void {
+  if (!soundsEnabled) return
+  const context = liveContext()
+  if (!context || context.state === 'closed') return
+  try {
+    const source = context.createBufferSource()
+    source.buffer = buffer
+    source.connect(context.destination)
+    source.start()
+  } catch {
+    /* Context closed or playback was blocked. */
+  }
+}
+
+async function shutdownAudio(): Promise<void> {
+  const current = ctx
+  ctx = null
+  buffers.clear()
+  if (current && current.state !== 'closed') {
+    try {
+      await current.close()
+    } catch {
+      /* already closed */
+    }
+  }
+  releaseSession()
+}
+
+export function setBettingSoundEnabled(enabled: boolean): void {
+  soundsEnabled = enabled
+  if (!enabled) track(shutdownAudio())
+}
+
+/**
+ * Call from a tap or click while sounds are on. Resumes the mixable audio
+ * context so a later bot action can play. Does nothing while sounds are off.
+ */
+export function unlockBettingAudio(): void {
+  if (!soundsEnabled) return
+  const context = liveContext()
+  if (!context) return
+  if (context.state === 'suspended') {
+    try {
+      track(context.resume())
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!buffers.has('chips')) track(loadBuffer('chips', context))
+  if (!buffers.has('raise')) track(loadBuffer('raise', context))
+}
+
+/** Plays bet/call (chips) or raise-over (raise). Silent while sounds are off. */
+export function playBettingSound(kind: BettingSound): void {
+  if (!soundsEnabled) return
+  const context = liveContext()
+  if (!context) return
+  if (context.state === 'suspended') {
+    try {
+      track(context.resume())
+    } catch {
+      /* ignore */
+    }
+  }
+  const cached = buffers.get(kind)
+  if (!cached) {
+    track(
+      loadBuffer(kind, context).then((buffer) => {
+        if (buffer) playBuffer(buffer)
+      }),
+    )
+    return
+  }
+  playBuffer(cached)
+}
+
+/** If the engine emitted a new betting sound since `beforeNonce`, play it. */
 export function playBettingSoundIfNew(
   beforeNonce: number,
   afterNonce: number,

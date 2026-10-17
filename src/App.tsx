@@ -1370,9 +1370,9 @@ function PlayScreen({
   }
 
   useEffect(() => {
-    const onFirstTouch = () => unlockBettingAudio()
-    window.addEventListener('pointerdown', onFirstTouch, { once: true, passive: true })
-    return () => window.removeEventListener('pointerdown', onFirstTouch)
+    const onPointerDown = () => unlockBettingAudio()
+    window.addEventListener('pointerdown', onPointerDown, { passive: true })
+    return () => window.removeEventListener('pointerdown', onPointerDown)
   }, [])
 
   useEffect(() => {
