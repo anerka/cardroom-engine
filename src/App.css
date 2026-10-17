@@ -1399,6 +1399,11 @@
   transform: translateX(-50%);
 }
 
+/* The sixth player sits bottom-right, above the action buttons. */
+.play--phone-landscape .seat--bottom {
+  bottom: max(7.15rem, calc(env(safe-area-inset-bottom, 0px) + 6.75rem));
+}
+
 /* Bottom opponents use the same stack as you: name above, cards on the bottom edge. */
 .play--phone-landscape .seat--bottom .player-card {
   flex-direction: column;
@@ -1630,6 +1635,49 @@
 
 .last-hand--spread .card-face__rank {
   white-space: nowrap;
+}
+
+/* Phone landscape must not pin the recap header or the winning line over the cards. */
+.last-hand--spread .play-bar,
+.last-hand--spread .play--phone-landscape .play-bar {
+  position: static;
+  pointer-events: auto;
+  padding: 0.35rem 0.45rem 0.4rem;
+}
+
+.last-hand--spread .play-bar-left,
+.last-hand--spread .play--phone-landscape .play-bar-left {
+  flex-direction: row;
+  align-items: center;
+  max-width: none;
+}
+
+.last-hand--spread .play-table-column,
+.last-hand--spread .play--phone-landscape .play-table-column,
+.last-hand--spread .table-wrap,
+.last-hand--spread .play--phone-landscape .table-wrap,
+.last-hand--spread .felt,
+.last-hand--spread .play--phone-landscape .felt {
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.last-hand--spread .under-felt,
+.last-hand--spread .play--phone-landscape .under-felt,
+.last-hand--spread .play--phone-landscape .under-felt:has(.winning-hand) {
+  position: static;
+  inset: auto;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  margin: 0;
+  padding: 0.45rem 0.75rem 0.9rem;
+  pointer-events: none;
 }
 
 .winning-hand {
