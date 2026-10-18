@@ -1590,14 +1590,22 @@
   height: 100%;
   min-height: 0;
   max-height: 100%;
+  max-width: none;
+  width: 100%;
+  margin: 0;
   overflow: hidden;
   padding-bottom: 0.6rem;
+  align-items: stretch;
 }
 
 .last-hand--spread .play-table-column {
   overflow: auto;
   justify-content: flex-start;
+  align-items: stretch;
   min-height: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 .last-hand--spread .table-wrap,
@@ -1734,7 +1742,10 @@
 .last-hand--spread .play--phone-landscape .felt {
   position: relative;
   inset: auto;
-  width: auto;
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
   height: auto;
   min-height: 0;
   max-height: none;
