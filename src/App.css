@@ -1643,7 +1643,8 @@
 .last-hand--spread .seat--opp .player-card,
 .last-hand--spread .player-card--hero {
   display: grid;
-  grid-template-columns: minmax(4.4rem, max-content) minmax(0, 1fr);
+  /* Same name column on every row so the first card of each hand shares one line. */
+  grid-template-columns: 6.75rem minmax(0, 1fr);
   grid-template-areas:
     "who cards"
     "stack cards";
@@ -1655,9 +1656,11 @@
   padding: 0.22rem 0.4rem;
 }
 
-.last-hand--spread .player-head {
+.last-hand--spread .player-head,
+.last-hand--spread .player-card--hero .player-head {
   grid-area: who;
   justify-content: flex-start;
+  flex-wrap: nowrap;
 }
 
 .last-hand--spread .stack {
@@ -1669,15 +1672,16 @@
 .last-hand--spread .hand-zone--hero-line {
   grid-area: cards;
   margin: 0;
-  justify-self: end;
+  justify-self: start;
+  width: 100%;
   min-width: 0;
 }
 
 .last-hand--spread .cards-row--hero-line {
   gap: 0;
-  width: auto;
+  width: 100%;
   max-width: 100%;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: flex-start;
   min-height: 0;
   overflow-x: auto;
