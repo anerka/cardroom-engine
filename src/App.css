@@ -1052,24 +1052,65 @@
     padding-bottom: max(0.35rem, env(safe-area-inset-bottom, 0px));
   }
 
+  .status-msg {
+    height: 2.6rem;
+    margin-bottom: 0.35rem;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
   .play-table-column--narrow {
     flex: 1 1 auto;
     min-height: 0;
     justify-content: flex-start;
+    align-items: center;
   }
 
+  /* One circle, sized from the screen. Buttons and messages do not resize it. */
   .play-table-column--narrow .table-wrap {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    width: min(100%, calc(100dvh - 14.5rem));
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    height: auto;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
+    margin-inline: auto;
   }
 
   .play-table-column--narrow .felt {
-    flex: 1 1 auto;
-    height: auto;
+    flex: none;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1 / 1;
     min-height: 0;
-    padding-bottom: clamp(6.4rem, 22vw, 8rem);
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .play-table-column--narrow .felt::before {
+    left: 50%;
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    width: 86%;
+    height: 86%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+  }
+
+  .play-table-column--narrow .felt-center {
+    top: 50%;
+  }
+
+  .play-table-column--narrow .under-felt {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    overflow: auto;
+    justify-content: flex-start;
+    padding-top: 0.45rem;
   }
 
   .table-wrap,
@@ -1563,13 +1604,17 @@
 .last-hand--spread .felt {
   min-height: 0;
   height: auto;
+  width: 100%;
+  max-width: none;
+  aspect-ratio: auto;
+  flex: none;
 }
 
 .last-hand--spread .felt {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.55rem 0.35rem 0.75rem;
+  gap: 0.28rem;
+  padding: 0.2rem 0.35rem 0.35rem;
 }
 
 .last-hand--spread .seats-ring {
@@ -1581,7 +1626,7 @@
   inset: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.28rem;
 }
 
 .last-hand--spread .seat--opp,
@@ -1597,19 +1642,44 @@
 
 .last-hand--spread .seat--opp .player-card,
 .last-hand--spread .player-card--hero {
+  display: grid;
+  grid-template-columns: minmax(4.4rem, max-content) minmax(0, 1fr);
+  grid-template-areas:
+    "who cards"
+    "stack cards";
+  align-items: center;
+  column-gap: 0.4rem;
+  row-gap: 0;
   width: 100%;
   max-width: 100%;
-  flex-direction: column;
-  align-items: center;
+  padding: 0.22rem 0.4rem;
+}
+
+.last-hand--spread .player-head {
+  grid-area: who;
+  justify-content: flex-start;
+}
+
+.last-hand--spread .stack {
+  grid-area: stack;
+  margin: 0;
+  text-align: left;
+}
+
+.last-hand--spread .hand-zone--hero-line {
+  grid-area: cards;
+  margin: 0;
+  justify-self: end;
+  min-width: 0;
 }
 
 .last-hand--spread .cards-row--hero-line {
   gap: 0;
   width: auto;
   max-width: 100%;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: flex-start;
-  min-height: 3.2rem;
+  min-height: 0;
   overflow-x: auto;
 }
 
@@ -2330,4 +2400,19 @@ html[data-deck='four'] .card--suit-s {
   .seat--hero .cards-row--hero-line .card.back {
     font-size: clamp(0.92rem, 4.4vw, 1.08rem);
   }
+}
+
+/* Last hand: your cards use the same size as every other seat, after the
+   landscape hero shrink so a phone recap does not leave you with a small fan. */
+.last-hand .seat--hero .card.card--face,
+.last-hand .seat--hero .cards-row--hero-line .card.back,
+.last-hand .seat--opp .card.card--face,
+.last-hand .seat--opp .cards-row--hero-line .card.back {
+  font-size: clamp(1.02rem, 3.8vw, 1.24rem);
+  min-height: 3.05em;
+  min-width: 2.12em;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  width: auto;
+  max-width: none;
 }

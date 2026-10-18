@@ -176,63 +176,63 @@ function landscapeTable(opponentCount: number): { heroLeft: number; opponents: S
 }
 
 /**
- * Upright phone. Seats spread down both rails so each hand stays clear of
- * the next. Hero is bottom center except at six players.
+ * Upright phone: one fixed circle. Seats sit on that rim.
+ * Hero is bottom center except at six players.
  */
 function narrowTable(opponentCount: number): { heroLeft: number; opponents: SeatPos[] } {
   switch (opponentCount) {
     case 0:
       return { heroLeft: 50, opponents: [] }
     case 1:
-      return { heroLeft: 50, opponents: [{ left: 50, top: 18 }] }
+      return { heroLeft: 50, opponents: [{ left: 50, top: 16 }] }
     case 2:
       return {
         heroLeft: 50,
         opponents: [
-          { left: 22, top: 32 },
-          { left: 78, top: 32 },
+          { left: 20, top: 26 },
+          { left: 80, top: 26 },
         ],
       }
     case 3:
       return {
         heroLeft: 50,
         opponents: [
-          { left: 14, top: 48 },
-          { left: 50, top: 16 },
-          { left: 86, top: 48 },
+          { left: 14, top: 44 },
+          { left: 50, top: 14 },
+          { left: 86, top: 44 },
         ],
       }
     case 4:
       return {
         heroLeft: 50,
         opponents: [
-          { left: 12, top: 52 },
-          { left: 30, top: 22 },
-          { left: 70, top: 22 },
-          { left: 88, top: 52 },
+          { left: 14, top: 54 },
+          { left: 28, top: 20 },
+          { left: 72, top: 20 },
+          { left: 86, top: 54 },
         ],
       }
     case 5:
       return {
-        heroLeft: 32,
+        heroLeft: 30,
         opponents: [
-          { left: 14, top: 36 },
-          { left: 32, top: 16 },
-          { left: 62, top: 14 },
-          { left: 86, top: 36 },
-          { left: 78, top: 60 },
+          { left: 16, top: 38 },
+          { left: 34, top: 16 },
+          { left: 60, top: 13 },
+          { left: 84, top: 34 },
+          { left: 76, top: 62 },
         ],
       }
     default:
       return {
         heroLeft: 50,
         opponents: [
-          { left: 14, top: 58 },
-          { left: 12, top: 34 },
-          { left: 32, top: 15 },
-          { left: 68, top: 15 },
-          { left: 88, top: 34 },
-          { left: 86, top: 58 },
+          { left: 16, top: 64 },
+          { left: 14, top: 38 },
+          { left: 34, top: 15 },
+          { left: 66, top: 15 },
+          { left: 86, top: 38 },
+          { left: 84, top: 64 },
         ],
       }
   }
