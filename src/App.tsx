@@ -322,7 +322,9 @@ function LastHandOverlay({
 }) {
   const opponents = review.players.filter((p) => !p.isHuman)
   const hero = review.players.find((p) => p.isHuman)
-  const spreadCards = tableLayout !== 'wide'
+  // Every window uses the stacked recap. The round table centers each fan,
+  // so a short fold lines up with the final street instead of the first card.
+  const spreadCards = true
   const seats = tablePlan(tableLayout, opponents.length)
 
   const seatCard = (p: HandReview['players'][number], heroSeat: boolean) => (
